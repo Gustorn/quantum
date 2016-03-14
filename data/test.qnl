@@ -1,0 +1,3 @@
+0:quantum(0,1,1,0)
+1:hadamard[0](1) 2:pauli_y[1](1) 3:swap[2](1,2) 4:probe[3]("AfterSwap")
+5:hadamard[3](3) 6:cnot[5](1,4) 7:probe[6]("AfterCNOT")
