@@ -145,8 +145,11 @@ end
 # in the computational basis
 function partial_measure(state::QuantumState, bit::Int)
     new_state = fill(0.0 + 0im, 2^(state.bits - 1))
+
+    # We can assume the qubit is normalized, so we only need to figure
+    # out the probability of getting a |0>. If that didn't happen it's
+    # guaranteed to be |1>
     prob0 = 0.0
-    prob1 = 0.0
 
     bit = state.bits - bit
 
@@ -155,12 +158,10 @@ function partial_measure(state::QuantumState, bit::Int)
     for b = 0:length(state) - 1
         if is_zero(b, bit)
             prob0 += abs2(state[b + 1])
-        else
-            prob1 += abs2(state[b + 1])
         end
     end
 
-    # And measure the bit
+    # And measure the bit.
     measurement = rand() <= prob0 ? 0 : 1
 
     # Next collect the coefficients for the basis vectors of the

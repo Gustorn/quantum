@@ -1,7 +1,11 @@
 include("QSpice.jl")
 
-using QSpice.Gates, QSpice.State, QSpice.Util
+using QSpice, QSpice.Gates, QSpice.State, QSpice.Util, QSpice.Netlist
 
+#parse_netlist("data/test.qnl")
+simulate("data/test.qnl")
+
+#=
 q = State.from_states(BELL_STATE, QUBIT_1, QUBIT_1)
 isqrt = 1.0 / sqrt(2)
 
@@ -28,3 +32,4 @@ println("Measuring bits 1 and 3")
 m2, p2 = partial_measure(q, 2, 3)
 @show m2
 print_bases(p2)
+=#
