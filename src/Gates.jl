@@ -1,5 +1,7 @@
 module Gates
 
+using Iterators.zip
+
 using QSpice.State
 using QSpice.Util
 
@@ -193,6 +195,66 @@ function partial_measure(state::QuantumState, bit::Int)
     map!(x -> x / n, new_state)
 
     return (measurement, QuantumState(new_state, state.bits - 1))
+end
+
+function partial_measure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
+    # First construct the array of bits we want to measure
+    bits = [x0, x1]
+    append!(bits, [xs...])
+    map!(b -> state.bits - b, bits)
+    sort!(bits)
+
+    partial_state = fill(0.0 + 0im, 2^length(bits))
+    new_state = fill(0.0 + 0im, 2^(state.bits - length(bits)))
+
+    # First construct the partial state we're going to measure
+    for basis in 0:length(state) - 1
+        # First construct the index of the basis vector in the
+        # new, partial state
+        partial_index = 0
+        shift_by = 0
+        for bit in bits
+           cb = get_bit(basis, bit)
+           partial_index = partial_index | (cb << shift_by)
+           shift_by += 1
+        end
+
+        # Then add the coefficient of the current state to the new one
+        partial_state[partial_index + 1] += state[basis + 1]
+    end
+
+    # Measure it
+    measurement = measure(QuantumState(partial_state, 2^length(bits)))
+
+    # The measurement returns the result in 1:bit[0], length:bit[length] order, while
+    # the original bits array stores them in 1:bit[length] length: bit[0]
+    bits_msb_lsb = reverse(bits)
+
+    for basis in 0:length(state) - 1
+        # Check if the current basis vector matches the measurement at the specified bits
+        state_matches = true
+        for (i, bit) in zip(bits_msb_lsb, measurement)
+            if get_bit(basis, i) != bit
+                state_matches = false
+            end
+        end
+
+        removed_bits = 0
+        if state_matches
+            new_index = basis
+            for bit in bits
+                new_index = shift_range_down(new_index, bit - removed_bits)
+                removed_bits += 1
+            end
+
+            new_state[new_index + 1] += state[basis + 1]
+        end
+    end
+
+    n = sqrt(reduce((accum, x) -> accum + abs2(x), new_state))
+    map!(x -> x / n, new_state)
+
+    return (measurement, QuantumState(new_state, state.bits - length(bits)))
 end
 
 function probe(state::QuantumState, name::AbstractString)

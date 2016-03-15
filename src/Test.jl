@@ -19,3 +19,10 @@ print_bases(q)
 @show measurement
 print_bases(posterior)
 
+println()
+println()
+
+m2, p2 = partial_measure(q, 1, 2)
+print_bases(q)
+print_bases(p2)
+@show m2

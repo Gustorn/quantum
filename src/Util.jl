@@ -1,15 +1,17 @@
 module Util
 
-export swap_bit, is_zero, set_bit,
+export swap_bit, is_zero, set_bit, get_bit,
        clear_bit, flip_bit,
        bit_range_equal, shift_range_down
+
+const ONE = 0x00000001
 
 # Executes the XOR swap on two individual bits
 # `from` and `to` are the 0 based indicies of the bit
 function swap_bit(num::Int, from::Int, to::Int)
     # Store the XOR'd value of the two bits we want to swap
     # in the LSB of temp
-    temp = ((num >>> from) $ (num >>> to)) & 0x01
+    temp = ((num >>> from) $ (num >>> to)) & ONE
     # First shift the bits we want to swap in the correct position,
     # then XOR them with the original number to complete the swap
     return num $ ((temp << from) | (temp << to))
@@ -18,21 +20,25 @@ end
 # Checks if a specific bit in a number is zero.
 # `bit` is the 0-based index of the bit we want to check
 function is_zero(num::Int, bit::Int)
-    return (num & (0x01 << bit)) == 0
+    return (num & (ONE << bit)) == 0
+end
+
+function get_bit(num::Int, bit::Int)
+    return (num & (ONE << bit)) >>> bit
 end
 
 # Sets the bit indicated by `bit` to 1 and returns the new value
 function set_bit(num::Int, bit::Int)
-    return num | (0x01 << bit)
+    return num | (ONE << bit)
 end
 
 function flip_bit(num::Int, bit::Int)
-    return num $ (0x01 << bit)
+    return num $ (ONE << bit)
 end
 
 # Sets the bit indicated by `bit` to 0 and returns the new value
 function clear_bit(num::Int, bit::Int)
-    return num & ~(0x01 << bit)
+    return num & ~(ONE << bit)
 end
 
 function bit_range_equal(num::Int, start::Int, pattern::Int)
@@ -43,8 +49,14 @@ end
 # bit from the original number, and shifting the upper half down
 # 1, while keeping the lower half intact
 function shift_range_down(num::Int, bit::Int)
-    upper = ((num & (0xffffffff << (bit + 1))) >>> 1)
-    lower = num & ((0x01 << bit) - 1)
+    upper = (num & (0xffffffff << (bit + 1))) >>> 1
+    lower = num & ((ONE << bit) - 1)
+    return upper | lower
+end
+
+function shift_range_down(num::Int, start::Int, nbits::Int)
+    upper = (num & (0xffffffff << (start + 1))) >>> nbits
+    lower = num & ((ONE << (start - nbits + 1)) - 1)
     return upper | lower
 end
 
