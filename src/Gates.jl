@@ -186,7 +186,15 @@ function partial_measure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
     # First construct the array of bits we want to measure.
     bits = [x0, x1]
     append!(bits, [xs...])
+
+    # Next perform the usual mapping: bit0 is physically represented by a higher
+    # bit in the index than bitN. Example:
+    # Given the state: |1000>, the index representing qubit0, which in case is |1>,
+    # is 0b1000, hence the need for the subtraction
     map!(b -> state.bits - b, bits)
+
+    # And finally sort the bits, so the lowest (phyiscal) / highest (real) bits
+    # come first.
     sort!(bits)
 
     num_measured  = length(bits)
@@ -216,19 +224,16 @@ function partial_measure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
         probabilities[partial_index + 1] += abs2(state[basis + 1])
     end
 
-    # Measure it, keeping the same format as the regular `measure` function
-    measurement = reverse(digits(weighed_random_state(probabilities), 2, num_measured))
-
-
-    # The measurement returns the result in 1:bit[0], length:bit[length] order, while
-    # the original bits array stores them in 1:bit[length] length: bit[0]
-    bits_rev = reverse(bits)
+    # Measure it. Important note: this is the reverse of the order returned by
+    # measure, but it makes further calculations easier. Don't forget to reverse
+    # it before returning it.
+    measurement = digits(weighed_random_state(probabilities), 2, num_measured)
 
     # Now build up the posterior state
     for basis in 0:length(state) - 1
         # Check if the current basis vector matches the measurement at the specified bits
         state_matches = true
-        for (i, bit) in zip(bits_rev, measurement)
+        for (i, bit) in zip(bits, measurement)
             if get_bit(basis, i) != bit
                 state_matches = false
             end
@@ -240,7 +245,15 @@ function partial_measure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
             # Now we construct the basis vector of the new state by removing the part we
             # measured. It's important that this operation is performed in LSB->MSB order:
             # this way we can consistently lower the index of the bit we want to remove,
-            # because the next bit is guaranteed to be higher than previous one
+            # because the next bit is guaranteed to be higher than previous one. Example:
+            # Given the state |1010>, if we measured qubits 2 and 3 (|01> in this example),
+            # then the algorithm performs the following:
+            # 1. First remove the first (lowest physical/highest actual) bit at index 2,
+            #    highlighted: |10(1)0>
+            # 2. This yields the following state: |100>. The next index we want to remove is 3,
+            #    but note how that index shifted down by one place. With a more visual representation,
+            #    step 1 performed the following: |abcd> -> |abd>, or with indices: |4321> -> |431>
+            # 3. Decrement the index we want to remove at, and proceed with step 1
             removed_bits = 0
             new_index = basis
             for bit in bits
@@ -259,6 +272,8 @@ function partial_measure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
     n = sqrt(reduce((accum, x) -> accum + abs2(x), 0.0, new_state))
     map!(x -> x / n, new_state)
 
+    # Match the bit order of the regular `measure` function
+    reverse!(measurement)
     return (measurement, QuantumState(new_state, state.bits - length(bits)))
 end
 
