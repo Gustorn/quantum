@@ -24,7 +24,7 @@ type Gate
     index::Int
     fn::Function
     inputs::Vector{Int}
-    arguments::Vector{Int}
+    arguments::Vector{Any}
 end
 
 type InitialState
@@ -32,50 +32,113 @@ type InitialState
     state::QuantumState
 end
 
-function read_gates(filename::AbstractString)
-    file = open(filename);
-    gate_strings = imap(l -> split(l), eachline(file)) |> collect
-    close(file)
-    return vcat(gate_strings...)
+function ignore_whitespace(stream)
+    pos = 1
+    while isspace(stream[pos]) pos += 1 end
+    return stream[pos:end]
 end
 
-function parse_one(gate_string::AbstractString)
-    index, rest = split(gate_string, ":")
-    index = parse(Int, index)
+function parse_index(stream)
+    stream = ignore_whitespace(stream)
 
-    name, rest = split(rest, "[")
-
-    if name == "qstate"
-        args = split(split(rest, "(")[2], ")")[1]
-        args = split(args, ",")
-        return InitialState(index, from_states(map(x -> x == "0" ? QUBIT_0 : QUBIT_1, args)...))
-        return gate_string
+    if !isdigit(stream[1])
+        return (Nullable{Int}(), stream)
     end
 
-    fn = NAME_FN_MAP[name]
+    index_end = findfirst(stream, ':')
+    return (tryparse(Int, stream[1:index_end - 1]), stream[index_end + 1:end])
+end
 
-    inputs, rest = split(rest, "]")
-    inputs = map(x -> parse(Int, x), split(inputs, ","))
+function parse_name(stream)
+    stream = ignore_whitespace(stream)
 
-    args = split(split(rest, "(")[2], ")")[1]
-    if length(args) > 0
-        args = map(x -> parse(Int, x), split(args, ","))
-    else
-        args = []
+    if !isalpha(stream[1])
+        return (Nullable{AbstractString}(), stream)
     end
-    return Gate(index, fn, inputs, args)
+
+    index_end = min(findfirst(stream, '['), findfirst(stream, '('))
+    return (Nullable(stream[1:index_end - 1]), stream[index_end:end])
+end
+
+function parse_connections(stream)
+    stream = ignore_whitespace(stream)
+
+    if stream[1] != '['
+        return (Nullable{Array{Int}}(), stream)
+    end
+
+    index_end = findfirst(stream, ']')
+    split_connections = split(stream[2:index_end - 1], ',', keep = false)
+    connections = imap(x -> parse(Int, strip(x)), split_connections) |> collect
+    return (Nullable(connections), stream[index_end + 1:end])
+end
+
+function parse_argument(arg)
+    arg = strip(arg)
+    maybe_int = tryparse(Int, arg)
+    return isnull(maybe_int) ? arg : get(maybe_int)
+end
+
+function parse_arguments(stream)
+    stream = ignore_whitespace(stream)
+
+    if stream[1] != '('
+        return (Nullable{Array{Any}}(), stream)
+    end
+
+    index_end = findfirst(stream, ')')
+    split_args = split(stream[2:index_end - 1], ',', keep = false)
+    arguments = imap(parse_argument, split_args) |> collect
+    return (Nullable(arguments), stream[index_end + 1:end])
+end
+
+function parse_qubit(qubit::AbstractString)
+    if lowercase(qubit) == "bell"
+        return BELL_STATE
+    end
+    error("Unsupported qubit state")
+end
+
+function parse_qubit(qubit::Int)
+    if qubit == 0
+        return QUBIT_0
+    elseif qubit == 1
+        return QUBIT_1
+    end
+    error("Unsupported qubit state")
 end
 
 function parse_netlist(filename::AbstractString)
-    gate_strings = read_gates(filename)
-    outputs = fill(Nullable{QuantumState}(), length(gate_strings))
-    elements = map(parse_one, gate_strings)
+    file = open(filename)
+    netlist = strip(readall(file))
+    close(file)
 
-    initial_states = filter(x -> isa(x, InitialState), elements)
-    filter!(x -> isa(x, Gate), elements)
+    initial_state::Vector{InitialState} = []
+    gates::Vector{Gate} = []
 
-    gates::Vector{Gate} = elements
-    return (initial_states, gates, outputs)
+    while netlist != ""
+        index, netlist = parse_index(netlist)
+        if isnull(index) error("No index found for gate in the netlist") end
+
+        name, netlist = parse_name(netlist)
+        if isnull(name) error("No name found for gate in the netlist") end
+
+        connections, netlist = parse_connections(netlist)
+        arguments, netlist = parse_arguments(netlist)
+
+        if get(name) == "qstate"
+            if isnull(arguments) error("No qubits given for an initial quantum state") end
+            push!(initial_state, InitialState(get(index), from_states(map(parse_qubit, get(arguments))...)))
+        else
+            if !haskey(NAME_FN_MAP, get(name))
+                error("The netlist contains a quantum gate that's not implemented yet")
+            end
+            fn = NAME_FN_MAP[get(name)]
+            push!(gates, Gate(get(index), fn, get(connections), get(arguments)))
+        end
+    end
+    outputs = fill(Nullable{QuantumState}(), length(initial_state) + length(gates))
+    return (initial_state, gates, outputs)
 end
 
 end
