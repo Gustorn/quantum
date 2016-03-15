@@ -13,4 +13,14 @@ function read_gates(filename::AbstractString)
     return vcat(gate_strings...)
 end
 
+function parse_one(gate_string::AbstractString)
+
+end
+
+function parse(filename::AbstractString)
+    gate_strings = read_gates(filename)
+    outputs = fill(null(), length(gate_strings))
+
+end
+
 end

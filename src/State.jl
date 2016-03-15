@@ -6,7 +6,7 @@ import Base: convert, copy, getindex, length,
              print, show, showcompact,
              start, done, next
 
-export QuantumState, QUBIT_0, QUBIT_1,
+export QuantumState, QUBIT_0, QUBIT_1, BELL_STATE,
        from_bloch, from_states, from_vector,
        to_bases, print_bases
 
@@ -21,6 +21,7 @@ end
 # The two constants representing the |0> and |1> states (respectively)
 const QUBIT_0 = QuantumState([1,0], 1)
 const QUBIT_1 = QuantumState([0,1], 1)
+const BELL_STATE = QuantumState(1.0 / sqrt(2) .* [1,0,0,1], 2)
 
 # Constructs a new quantum state from the given state vector. It automatically
 # calculates the number of bits
@@ -45,8 +46,7 @@ end
 
 # Converts the quantum state into the tuples of its bases and their magnitudes
 function to_bases(state::QuantumState)
-    n_bits = floor(Int, log2(length(state.vector) - 1))
-    to_bitstring = x -> (bits(x[1] - 1)[end - n_bits:end], x[2])
+    to_bitstring = x -> (bin(x[1] - 1, state.bits), x[2])
     return imap(to_bitstring, enumerate(state.vector)) |> collect
 end
 
@@ -78,7 +78,7 @@ function print_bases(state::QuantumState)
     for basis in bases
         println(rpad(string(basis[2]), longest),
                 "    |", basis[1], ">    ",
-                "Probability: ", real(conj(basis[2]) * basis[2]))
+                "Probability: ", abs2(basis[2]))
     end
 end
 
