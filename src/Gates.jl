@@ -1,6 +1,6 @@
 module Gates
 
-using Iterators.zip
+using Iterators
 
 using QSpice.State
 using QSpice.Util
@@ -234,7 +234,7 @@ function partial_measure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
     for basis in 0:length(state) - 1
         # Check if the current basis vector matches the measurement at the specified bits
         state_matches = true
-        for (i, bit) in zip(bits, measurement)
+        @itr for (i, bit) in zip(bits, measurement)
             if get_bit(basis, i) != bit
                 state_matches = false
             end
@@ -281,7 +281,7 @@ end
 # Prints the current state of the qubit in terms of basis vectors, coefficients
 # and probabilities. Useful for debugging and visualization. Guaranteed not to disturb
 # the quantum state
-function probe(state::QuantumState, name::AbstractString)
+function probe{T<:AbstractString}(state::QuantumState, name::T)
     println(name)
     print_bases(copy(state))
     println()

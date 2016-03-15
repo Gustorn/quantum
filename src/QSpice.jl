@@ -30,7 +30,7 @@ function flush(gates::Vector{Gate}, outputs::Vector{Nullable{QuantumState}})
     end
 end
 
-function simulate(filename::AbstractString)
+function simulate{S<:AbstractString}(filename::S)
     initial_states, gates, outputs = parse_netlist(filename)
     for s in initial_states
         outputs[s.index] = s.state

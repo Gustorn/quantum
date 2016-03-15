@@ -6,7 +6,7 @@ using QSpice.State, QSpice.Gates
 
 export Gate, parse_netlist
 
-const NAME_FN_MAP = Dict(
+const NAME_FN_MAP = Dict{ASCIIString, Function}(
     "hadamard"    => hadamard,
     "cnot"        => cnot,
     "not"         => not,
@@ -32,13 +32,13 @@ type InitialState
     state::QuantumState
 end
 
-function ignore_whitespace(stream)
+function ignore_whitespace{S<:AbstractString}(stream::S)
     pos = 1
     while isspace(stream[pos]) pos += 1 end
     return stream[pos:end]
 end
 
-function parse_index(stream)
+function parse_index{S<:AbstractString}(stream::S)
     stream = ignore_whitespace(stream)
 
     if !isdigit(stream[1])
@@ -49,7 +49,7 @@ function parse_index(stream)
     return (tryparse(Int, stream[1:index_end - 1]), stream[index_end + 1:end])
 end
 
-function parse_name(stream)
+function parse_name{S<:AbstractString}(stream::S)
     stream = ignore_whitespace(stream)
 
     if !isalpha(stream[1])
@@ -60,7 +60,7 @@ function parse_name(stream)
     return (Nullable(stream[1:index_end - 1]), stream[index_end:end])
 end
 
-function parse_connections(stream)
+function parse_connections{S<:AbstractString}(stream::S)
     stream = ignore_whitespace(stream)
 
     if stream[1] != '['
@@ -73,13 +73,13 @@ function parse_connections(stream)
     return (Nullable(connections), stream[index_end + 1:end])
 end
 
-function parse_argument(arg)
+function parse_argument{S<:AbstractString}(arg::S)
     arg = strip(arg)
     maybe_int = tryparse(Int, arg)
     return isnull(maybe_int) ? arg : get(maybe_int)
 end
 
-function parse_arguments(stream)
+function parse_arguments{S<:AbstractString}(stream::S)
     stream = ignore_whitespace(stream)
 
     if stream[1] != '('
@@ -92,7 +92,7 @@ function parse_arguments(stream)
     return (Nullable(arguments), stream[index_end + 1:end])
 end
 
-function parse_qubit(qubit::AbstractString)
+function parse_qubit{S<:AbstractString}(qubit::S)
     if lowercase(qubit) == "bell"
         return BELL_STATE
     end
@@ -108,7 +108,7 @@ function parse_qubit(qubit::Int)
     error("Unsupported qubit state")
 end
 
-function parse_netlist(filename::AbstractString)
+function parse_netlist{S<:AbstractString}(filename::S)
     file = open(filename)
     netlist = strip(readall(file))
     close(file)

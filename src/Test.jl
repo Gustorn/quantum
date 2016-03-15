@@ -2,6 +2,8 @@ include("QSpice.jl")
 
 using QSpice, QSpice.Gates, QSpice.State, QSpice.Util, QSpice.Netlist
 
+
+simulate("data/test.qnl")
 simulate("data/test.qnl")
 
 println("Manual reproduction of netlist")
@@ -19,8 +21,8 @@ probe(q, "Probe after CNOT")
 q = State.from_states(QUBIT_1, QUBIT_0, BELL_STATE)
 isqrt = 1.0 / sqrt(2)
 
-#q = hadamard(q, 2)
-#q = cnot(q, 3, 2)
+q = hadamard(q, 2)
+q = cnot(q, 3, 2)
 q = pauli_y(q, 2)
 q = hadamard(q, 1)
 
