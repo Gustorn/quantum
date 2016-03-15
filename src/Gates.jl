@@ -138,19 +138,7 @@ end
 # have any benefits
 function measure(state::QuantumState)
     probabilities = map(abs2, state.vector)
-    prob_sum = sum(probabilities)
-
-    target = rand() * prob_sum
-    for (i, v) in enumerate(probabilities)
-        target -= v
-        if (target <= 0.0)
-            return reverse(digits(i - 1, 2, state.bits))
-        end
-    end
-
-    # In case of floating point rounding error, return the element
-    # with the otherwise highest probability
-    return reverse(digits(indmax(probabilities) - 1, 2, state.bits))
+    reverse(digits(weighed_random_state(probabilities), 2, state.bits))
 end
 
 # Performs partial measurement on the given bit of the quantum state
@@ -178,10 +166,7 @@ function partial_measure(state::QuantumState, bit::Int)
     # Next collect the coefficients for the basis vectors of the
     # posterior states
     for b = 0:length(state) - 1
-        if measurement == 0 && is_zero(b, bit)
-            new_basis = shift_range_down(b, bit)
-            new_state[new_basis + 1] += state[b + 1]
-        elseif measurement == 1 && !is_zero(b, bit)
+        if get_bit(b, bit) == measurement
             new_basis = shift_range_down(b, bit)
             new_state[new_basis + 1] += state[b + 1]
         end
@@ -191,78 +176,102 @@ function partial_measure(state::QuantumState, bit::Int)
     # to 1
     # TODO(gustorn): see if the error from FP precision has any visible
     # effect on the posterior states
-    n = sqrt(reduce((accum, x) -> accum + abs2(x), new_state))
+    n = sqrt(reduce((accum, x) -> accum + abs2(x), 0.0, new_state))
     map!(x -> x / n, new_state)
 
     return (measurement, QuantumState(new_state, state.bits - 1))
 end
 
 function partial_measure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
-    # First construct the array of bits we want to measure
+    # First construct the array of bits we want to measure.
     bits = [x0, x1]
     append!(bits, [xs...])
     map!(b -> state.bits - b, bits)
     sort!(bits)
 
-    partial_state = fill(0.0 + 0im, 2^length(bits))
-    new_state = fill(0.0 + 0im, 2^(state.bits - length(bits)))
+    num_measured  = length(bits)
+    num_posterior = state.bits - num_measured
+    probabilities = fill(0.0, 2^num_measured)
+    new_state = fill(0.0 + 0im, 2^num_posterior)
 
-    # First construct the partial state we're going to measure
+    # First build up the probabilities for the bits we're going to measure
     for basis in 0:length(state) - 1
         # First construct the index of the basis vector in the
-        # new, partial state
+        # new, partial state. This is done by incrementally copying
+        # the specific bits of the old basis vector into a new one
+        # Example: consider the basis vector |100> where want to copy
+        # bits 1 and 3 (|1> and |0> respectively). First we copy |0> into
+        # the first position of the new basis vector, giving us |x0>, where x
+        # is not yet filled in. Next we copy the |1>, yielding the desired
+        # |10> state
         partial_index = 0
         shift_by = 0
         for bit in bits
-           cb = get_bit(basis, bit)
-           partial_index = partial_index | (cb << shift_by)
-           shift_by += 1
+            cb = get_bit(basis, bit)
+            partial_index = partial_index | (cb << shift_by)
+            shift_by += 1
         end
 
-        # Then add the coefficient of the current state to the new one
-        partial_state[partial_index + 1] += state[basis + 1]
+        # Add |a|^2 to the probability of the appropriate basis
+        probabilities[partial_index + 1] += abs2(state[basis + 1])
     end
 
-    # Measure it
-    measurement = measure(QuantumState(partial_state, 2^length(bits)))
+    # Measure it, keeping the same format as the regular `measure` function
+    measurement = reverse(digits(weighed_random_state(probabilities), 2, num_measured))
+
 
     # The measurement returns the result in 1:bit[0], length:bit[length] order, while
     # the original bits array stores them in 1:bit[length] length: bit[0]
-    bits_msb_lsb = reverse(bits)
+    bits_rev = reverse(bits)
 
+    # Now build up the posterior state
     for basis in 0:length(state) - 1
         # Check if the current basis vector matches the measurement at the specified bits
         state_matches = true
-        for (i, bit) in zip(bits_msb_lsb, measurement)
+        for (i, bit) in zip(bits_rev, measurement)
             if get_bit(basis, i) != bit
                 state_matches = false
             end
         end
 
-        removed_bits = 0
+        # We only need to bother with the coefficients if the measurement matches the
+        # partial basis vector
         if state_matches
+            # Now we construct the basis vector of the new state by removing the part we
+            # measured. It's important that this operation is performed in LSB->MSB order:
+            # this way we can consistently lower the index of the bit we want to remove,
+            # because the next bit is guaranteed to be higher than previous one
+            removed_bits = 0
             new_index = basis
             for bit in bits
                 new_index = shift_range_down(new_index, bit - removed_bits)
                 removed_bits += 1
             end
 
+            # Add the coefficients from the old state to the new one
             new_state[new_index + 1] += state[basis + 1]
         end
     end
 
-    n = sqrt(reduce((accum, x) -> accum + abs2(x), new_state))
+    # Normalize the new state so that sum(|coeff|^2) == 1.0
+    # The same concerns about FP precision apply here just as
+    # they do in the single-bit version of partial measurement
+    n = sqrt(reduce((accum, x) -> accum + abs2(x), 0.0, new_state))
     map!(x -> x / n, new_state)
 
     return (measurement, QuantumState(new_state, state.bits - length(bits)))
 end
 
+# Prints the current state of the qubit in terms of basis vectors, coefficients
+# and probabilities. Useful for debugging and visualization. Guaranteed not to disturb
+# the quantum state
 function probe(state::QuantumState, name::AbstractString)
     println(name)
     print_bases(copy(state))
     println()
 end
 
+# The same as probe, but without the need for an explicit name
 function probe(state::QuantumState)
     print_bases(copy(state))
     println()

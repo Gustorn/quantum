@@ -2,7 +2,8 @@ module Util
 
 export swap_bit, is_zero, set_bit, get_bit,
        clear_bit, flip_bit,
-       bit_range_equal, shift_range_down
+       bit_range_equal, shift_range_down,
+       weighed_random_state
 
 const ONE = 0x00000001
 
@@ -60,5 +61,21 @@ function shift_range_down(num::Int, start::Int, nbits::Int)
     return upper | lower
 end
 
+
+function weighed_random_state{T<:Real}(probabilities::Vector{T})
+    prob_sum = sum(probabilities)
+
+    target = rand() * prob_sum
+    for (i, v) in enumerate(probabilities)
+        target -= v
+        if (target <= 0.0)
+            return i - 1
+        end
+    end
+
+    # In case of floating point rounding error, return the element
+    # with the otherwise highest probability
+    return indmax(probabilities) - 1
+end
 
 end
