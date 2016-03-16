@@ -47,7 +47,7 @@ end
 # Converts the quantum state into the tuples of its bases and their magnitudes
 function to_bases(state::QuantumState)
     to_bitstring = x -> (bin(x[1] - 1, state.bits), x[2])
-    return imap(to_bitstring, enumerate(state.vector)) |> collect
+    return map(to_bitstring, enumerate(state.vector))
 end
 
 convert(state::QuantumState) = state.vector

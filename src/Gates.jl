@@ -5,7 +5,7 @@ using Iterators
 using QSpice.State
 using QSpice.Util
 
-export identity, hadamard, rotation, not, cnot, swap,
+export identity, hadamard, not, cnot, swap,
        phase_shift, pauli_x, pauli_y, pauli_z,
        measure, partial_measure, probe
 

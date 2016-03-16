@@ -1,6 +1,7 @@
 include("QSpice.jl")
 
 using QSpice, QSpice.Gates, QSpice.State, QSpice.Util, QSpice.Netlist
+using Benchmarks
 
 
 simulate("data/test.qnl")
@@ -41,3 +42,15 @@ println("Measuring bits 2 and 3")
 m2, p2 = partial_measure(q, 2, 3)
 @show m2
 print_bases(p2)
+
+
+#=
+q = from_states(BELL_STATE, QUBIT_0, QUBIT_1, QUBIT_1, BELL_STATE, QUBIT_1, QUBIT_0)
+@benchmark cnot(q, rand(1:q.bits), rand(1:q.bits))
+
+
+#q1 = from_states(QUBIT_0, QUBIT_1, QUBIT_1)
+#
+#@benchmark swap(q1, rand(1:q1.bits), rand(1:q1.bits))
+
+=#

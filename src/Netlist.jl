@@ -1,7 +1,5 @@
 module Netlist
 
-using Iterators
-
 using QSpice.State, QSpice.Gates
 
 export Gate, parse_netlist
@@ -69,7 +67,7 @@ function parse_connections{S<:AbstractString}(stream::S)
 
     index_end = findfirst(stream, ']')
     split_connections = split(stream[2:index_end - 1], ',', keep = false)
-    connections = imap(x -> parse(Int, strip(x)), split_connections) |> collect
+    connections = map(x -> parse(Int, strip(x)), split_connections)
     return (Nullable(connections), stream[index_end + 1:end])
 end
 
@@ -88,7 +86,7 @@ function parse_arguments{S<:AbstractString}(stream::S)
 
     index_end = findfirst(stream, ')')
     split_args = split(stream[2:index_end - 1], ',', keep = false)
-    arguments = imap(parse_argument, split_args) |> collect
+    arguments = map(parse_argument, split_args)
     return (Nullable(arguments), stream[index_end + 1:end])
 end
 
