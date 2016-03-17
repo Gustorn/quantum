@@ -12,13 +12,7 @@ using QSpice.State, QSpice.Gates, QSpice.Util, QSpice.Netlist
 export simulate
 
 function count_unfinished(outputs::Vector{Nullable{QuantumState}})
-    sum = 0
-    for o in outputs
-        if isnull(o)
-            sum += 1
-        end
-    end
-    return sum
+    return count(isnull, outputs)
 end
 
 function flush(gates::Vector{Gate}, outputs::Vector{Nullable{QuantumState}})

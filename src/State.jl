@@ -1,12 +1,12 @@
 module State
 
-using Iterators.imap
+using Iterators
 
 import Base: convert, copy, getindex, length,
              print, show, showcompact,
-             start, done, next
+             start, done, next, isapprox
 
-export QuantumState, QUBIT_0, QUBIT_1, BELL_STATE,
+export QuantumState, QUBIT_0, QUBIT_1, EMPTY_STATE, BELL_STATE,
        from_bloch, from_states, from_vector,
        to_bases, print_bases
 
@@ -21,7 +21,11 @@ end
 # The two constants representing the |0> and |1> states (respectively)
 const QUBIT_0 = QuantumState([1,0], 1)
 const QUBIT_1 = QuantumState([0,1], 1)
-const BELL_STATE = QuantumState(1.0 / sqrt(2) .* [1,0,0,1], 2)
+
+# TODO(gustorn): maybe get rid of the empty state and go for Nullable{QuantumState}
+# where applicable
+const EMPTY_STATE = QuantumState([], 0)
+const BELL_STATE  = QuantumState(1.0 / sqrt(2) .* [1,0,0,1], 2)
 
 # Constructs a new quantum state from the given state vector. It automatically
 # calculates the number of bits
@@ -39,8 +43,8 @@ end
 
 # Returns the 1-qubit quantum state that represents the (r, theta, phi) location
 # on the Bloch-sphere
-function from_bloch(r::Float64, theta::Float64, phi::Float64)
-    state = [cos(angle.theta / 2), exp(im * angle.phi) * sin(angle.theta / 2)]
+function from_bloch(theta::Float64, phi::Float64)
+    state = [cos(theta / 2), exp(im * phi) * sin(theta / 2)]
     return QuantumState(state, 1)
 end
 
@@ -48,6 +52,15 @@ end
 function to_bases(state::QuantumState)
     to_bitstring = x -> (bin(x[1] - 1, state.bits), x[2])
     return map(to_bitstring, enumerate(state.vector))
+end
+
+function isapprox(q1::QuantumState, q2::QuantumState, atol=0.0001)
+    for (x, y) in zip(q1, q2)
+        if !isapprox(x, y, atol = atol)
+            return false
+        end
+    end
+    return true
 end
 
 convert(state::QuantumState) = state.vector

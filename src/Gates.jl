@@ -5,7 +5,7 @@ using Iterators
 using QSpice.State
 using QSpice.Util
 
-export identity, hadamard, not, cnot, swap,
+export identity, hadamard, not, cnot, swap, sqrt_swap,
        phase_shift, pauli_x, pauli_y, pauli_z,
        measure, partial_measure, probe
 
@@ -14,20 +14,20 @@ function identity(state::QuantumState)
 end
 
 function hadamard(state::QuantumState, bit::Int)
-    new_state = fill(0.0 + 0im, length(state))
+    new_state = Array{Complex{Float64}}(length(state))
     bit = state.bits - bit
     invsqrt2 = 1.0 / sqrt(2)
 
     for i = 1:length(state)
-        b  = i - 1
-        b0 = clear_bit(b, bit)
-        b1 = set_bit(b, bit)
+        basis  = i - 1
+        mapped0 = clear_bit(basis, bit)
+        mapped1 = set_bit(basis, bit)
 
-        new_state[b0 + 1] += invsqrt2 * state[i]
-        if is_zero(b, bit)
-            new_state[b1 + 1] += invsqrt2 * state[i]
+        new_state[i] = invsqrt2 * state[mapped0 + 1]
+        if is_zero(basis, bit)
+            new_state[i] += invsqrt2 * state[mapped1 + 1]
         else
-            new_state[b1 + 1] -= invsqrt2 * state[i]
+            new_state[i] -= invsqrt2 * state[mapped1 + 1]
         end
     end
 
@@ -35,31 +35,31 @@ function hadamard(state::QuantumState, bit::Int)
 end
 
 function not(state::QuantumState, bit::Int)
-    new_state = fill(0.0 + 0im, length(state))
+    new_state = Array{Complex{Float64}}(length(state))
 
     bit = state.bits - bit
     for i = 1:length(state)
-        b = i - 1
-        new_b = flip_bit(b, bit)
-        new_state[new_b + 1] += state[i]
+        basis = i - 1
+        mapped = flip_bit(basis, bit)
+        new_state[i] = state[mapped + 1]
     end
 
     return QuantumState(new_state, state.bits)
 end
 
 function cnot(state::QuantumState, ctrl::Int, flip::Int)
-    new_state = fill(0.0 + 0im, length(state))
+    new_state = Array{Complex{Float64}}(length(state))
 
     ctrl = state.bits - ctrl
     flip = state.bits - flip
 
     for i = 1:length(state)
-        b = i - 1
-        if is_zero(b, ctrl)
-            new_state[i] += state[i]
+        basis = i - 1
+        if is_zero(basis, ctrl)
+            new_state[i] = state[i]
         else
-            new_b = flip_bit(b, flip)
-            new_state[new_b + 1] += state[i]
+            mapped = flip_bit(basis, flip)
+            new_state[i] = state[mapped + 1]
         end
     end
 
@@ -67,30 +67,49 @@ function cnot(state::QuantumState, ctrl::Int, flip::Int)
 end
 
 function swap(state::QuantumState, x::Int, y::Int)
-    new_state = fill(0.0 + 0im, length(state))
+    new_state = Array{Complex{Float64}}(length(state))
 
     x = state.bits - x
     y = state.bits - y
 
     for i = 1:length(state)
-        b = i - 1
-        b_new = swap_bit(b, x, y)
-        new_state[b_new + 1] = state[i]
+        basis = i - 1
+        mapped = swap_bit(basis, x, y)
+        new_state[i] = state[mapped + 1]
+    end
+
+    return QuantumState(new_state, state.bits)
+end
+
+function sqrt_swap(state::QuantumState, x::Int, y::Int)
+    new_state = Array{Complex{Float64}}(length(state))
+
+    x = state.bits - x
+    y = state.bits - y
+
+    for i = 1:length(state)
+        basis = i - 1
+        mapped = swap_bit(basis, x, y)
+        if basis == mapped
+            new_state[i] = state[i]
+        else
+            new_state[i] = 0.5 * ((1 + im) * state[i] + (1 - im) * state[mapped + 1])
+        end
     end
 
     return QuantumState(new_state, state.bits)
 end
 
 function phase_shift(state::QuantumState, bit::Int, theta::Float64)
-    new_state = fill(0.0 + 0im, length(state))
+    new_state = Array{Complex{Float64}}(length(state))
     bit = state.bits - bit
 
     for i = 1:length(state)
-        b = i - 1
-        if is_zero(b, bit)
-            new_state[i] += state[i]
+        basis = i - 1
+        if is_zero(basis, bit)
+            new_state[i] = state[i]
         else
-            new_state[i] += exp(im * theta) * state[i]
+            new_state[i] = exp(im * theta) * state[i]
         end
     end
 
@@ -100,17 +119,17 @@ end
 pauli_x(state::QuantumState, bit::Int) = not(state, bit)
 
 function pauli_y(state::QuantumState, bit::Int)
-    new_state = fill(0.0 + 0im, length(state))
+    new_state = Array{Complex{Float64}}(length(state))
     bit = state.bits - bit
 
     for i = 1:length(state)
-        b = i - 1
-        if is_zero(b, bit)
-            b_new = set_bit(b, bit)
-            new_state[i] += im * state[b_new + 1]
+        basis = i - 1
+        if is_zero(basis, bit)
+            mapped = set_bit(basis, bit)
+            new_state[i] = im * state[mapped + 1]
         else
-            b_new = clear_bit(b, bit)
-            new_state[i] += -im * state[b_new + 1]
+            mapped = clear_bit(basis, bit)
+            new_state[i] = -im * state[mapped + 1]
         end
     end
 
@@ -118,15 +137,15 @@ function pauli_y(state::QuantumState, bit::Int)
 end
 
 function pauli_z(state::QuantumState, bit::Int)
-    new_state = fill(0.0 + 0im, length(state))
+    new_state = Array{Complex{Float64}}(length(state))
     bit = state.bits - bit
 
     for i = 1:length(state)
-        b = i - 1
-        if is_zero(b, bit)
-            new_state[i] += state[i]
+        basis = i - 1
+        if is_zero(basis, bit)
+            new_state[i] = state[i]
         else
-            new_state[i] -= state[i]
+            new_state[i] = -state[i]
         end
     end
 
@@ -144,7 +163,11 @@ end
 # Performs partial measurement on the given bit of the quantum state
 # in the computational basis
 function partial_measure(state::QuantumState, bit::Int)
-    new_state = fill(0.0 + 0im, 2^(state.bits - 1))
+    if state.bits == 1
+        return (measure(state), EMPTY_STATE)
+    end
+
+    new_state::Vector{Complex{Float64}} = fill(0.0 + 0im, 2^(state.bits - 1))
 
     # We can assume the qubit is normalized, so we only need to figure
     # out the probability of getting a |0>. If that didn't happen it's
@@ -180,28 +203,32 @@ function partial_measure(state::QuantumState, bit::Int)
     n = sqrt(reduce((accum, x) -> accum + abs2(x), 0.0, new_state))
     map!(x -> x / n, new_state)
 
-    return (measurement, QuantumState(new_state, state.bits - 1))
+    return ([measurement], QuantumState(new_state, state.bits - 1))
 end
 
 function partial_measure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
     # First construct the array of bits we want to measure.
-    bits = [x0, x1]
-    append!(bits, [xs...])
+    measured_bits = [x0, x1]
+    append!(measured_bits, [xs...])
+
+    if length(measured_bits) == state.bits
+        return (measure(state), EMPTY_STATE)
+    end
 
     # Next perform the usual mapping: bit0 is physically represented by a higher
     # bit in the index than bitN. Example:
     # Given the state: |1000>, the index representing qubit0, which in case is |1>,
     # is 0b1000, hence the need for the subtraction
-    map!(b -> state.bits - b, bits)
+    map!(b -> state.bits - b, measured_bits)
 
     # And finally sort the bits, so the lowest (phyiscal) / highest (real) bits
     # come first.
-    sort!(bits)
+    sort!(measured_bits)
 
-    num_measured  = length(bits)
+    num_measured  = length(measured_bits)
     num_posterior = state.bits - num_measured
-    probabilities = fill(0.0, 2^num_measured)
-    new_state = fill(0.0 + 0im, 2^num_posterior)
+    probabilities::Vector{Float64} = fill(0.0, 2^num_measured)
+    new_state::Vector{Complex{Float64}} = fill(0.0 + 0im, 2^num_posterior)
 
     # First build up the probabilities for the bits we're going to measure
     for basis in 0:length(state) - 1
@@ -215,7 +242,7 @@ function partial_measure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
         # |10> state
         partial_index = 0
         shift_by = 0
-        for bit in bits
+        for bit in measured_bits
             cb = get_bit(basis, bit)
             partial_index = partial_index | (cb << shift_by)
             shift_by += 1
@@ -234,7 +261,7 @@ function partial_measure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
     for basis in 0:length(state) - 1
         # Check if the current basis vector matches the measurement at the specified bits
         state_matches = true
-        @itr for (i, bit) in zip(bits, measurement)
+        @itr for (i, bit) in zip(measured_bits, measurement)
             if get_bit(basis, i) != bit
                 state_matches = false
             end
@@ -257,7 +284,7 @@ function partial_measure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
             # 3. Decrement the index we want to remove at, and proceed with step 1
             removed_bits = 0
             new_index = basis
-            for bit in bits
+            for bit in measured_bits
                 new_index = shift_range_down(new_index, bit - removed_bits)
                 removed_bits += 1
             end
@@ -275,7 +302,7 @@ function partial_measure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
 
     # Match the bit order of the regular `measure` function
     reverse!(measurement)
-    return (measurement, QuantumState(new_state, state.bits - length(bits)))
+    return (measurement, QuantumState(new_state, state.bits - length(measured_bits)))
 end
 
 # Prints the current state of the qubit in terms of basis vectors, coefficients
