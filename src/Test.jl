@@ -140,6 +140,42 @@ facts("CNOT gate") do
     end
 end
 
+facts("CCNOT gate") do
+    context("Three qubit mapping") do
+        s000 = from_states(QUBIT_0, QUBIT_0, QUBIT_0)
+        s001 = from_states(QUBIT_0, QUBIT_0, QUBIT_1)
+        s010 = from_states(QUBIT_0, QUBIT_1, QUBIT_0)
+        s011 = from_states(QUBIT_0, QUBIT_1, QUBIT_1)
+
+        s100 = from_states(QUBIT_1, QUBIT_0, QUBIT_0)
+        s101 = from_states(QUBIT_1, QUBIT_0, QUBIT_1)
+        s110 = from_states(QUBIT_1, QUBIT_1, QUBIT_0)
+        s111 = from_states(QUBIT_1, QUBIT_1, QUBIT_1)
+
+        @fact ccnot(s000, 1, 2, 3) --> roughly(s000)
+        @fact ccnot(s001, 1, 2, 3) --> roughly(s001)
+        @fact ccnot(s010, 1, 2, 3) --> roughly(s010)
+        @fact ccnot(s011, 1, 2, 3) --> roughly(s011)
+        @fact ccnot(s100, 1, 2, 3) --> roughly(s100)
+        @fact ccnot(s101, 1, 2, 3) --> roughly(s101)
+        @fact ccnot(s110, 1, 2, 3) --> roughly(s111)
+        @fact ccnot(s111, 1, 2, 3) --> roughly(s110)
+
+        @fact ccnot(s011, 2, 3, 1) --> roughly(s111)
+        @fact ccnot(s101, 1, 3, 2) --> roughly(s111)
+    end
+
+    context("Unitarity on N qubit states") do
+        random_test_range(3, 10) do test_state
+            x = rand(1:test_state.bits - 2)
+            y = rand(x + 1:test_state.bits - 1)
+            z = rand(y + 1:test_state.bits)
+            @fact ccnot(ccnot(test_state, x, y, z), x, y, z) --> roughly(test_state)
+        end
+    end
+end
+
+
 facts("Swap gate") do
     context("Two qubit mapping") do
         s00 = from_states(QUBIT_0, QUBIT_0)
@@ -164,6 +200,41 @@ facts("Swap gate") do
             x = rand(1:test_state.bits)
             y = rand(1:test_state.bits)
             @fact swap(swap(test_state, x, y), y, x) --> roughly(test_state)
+        end
+    end
+end
+
+facts("CSWAP gate") do
+    context("Three qubit mapping") do
+        s000 = from_states(QUBIT_0, QUBIT_0, QUBIT_0)
+        s001 = from_states(QUBIT_0, QUBIT_0, QUBIT_1)
+        s010 = from_states(QUBIT_0, QUBIT_1, QUBIT_0)
+        s011 = from_states(QUBIT_0, QUBIT_1, QUBIT_1)
+
+        s100 = from_states(QUBIT_1, QUBIT_0, QUBIT_0)
+        s101 = from_states(QUBIT_1, QUBIT_0, QUBIT_1)
+        s110 = from_states(QUBIT_1, QUBIT_1, QUBIT_0)
+        s111 = from_states(QUBIT_1, QUBIT_1, QUBIT_1)
+
+        @fact cswap(s000, 1, 2, 3) --> roughly(s000)
+        @fact cswap(s001, 1, 2, 3) --> roughly(s001)
+        @fact cswap(s010, 1, 2, 3) --> roughly(s010)
+        @fact cswap(s011, 1, 2, 3) --> roughly(s011)
+        @fact cswap(s100, 1, 2, 3) --> roughly(s100)
+        @fact cswap(s101, 1, 2, 3) --> roughly(s110)
+        @fact cswap(s110, 1, 2, 3) --> roughly(s101)
+        @fact cswap(s111, 1, 2, 3) --> roughly(s111)
+
+        @fact cswap(s011, 2, 1, 3) --> roughly(s110)
+        @fact cswap(s101, 3, 1, 2) --> roughly(s011)
+    end
+
+    context("Unitarity on N qubit states") do
+        random_test_range(3, 10) do test_state
+            x = rand(1:test_state.bits - 2)
+            y = rand(x + 1:test_state.bits - 1)
+            z = rand(y + 1:test_state.bits)
+            @fact cswap(cswap(test_state, x, y, z), x, z, y) --> roughly(test_state)
         end
     end
 end

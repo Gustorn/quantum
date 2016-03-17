@@ -7,6 +7,7 @@ using QSpice.Util
 
 export identity, hadamard, not, cnot, swap, sqrt_swap,
        phase_shift, pauli_x, pauli_y, pauli_z,
+       ccnot, cswap,
        measure, partial_measure, probe
 
 function identity(state::QuantumState)
@@ -66,6 +67,26 @@ function cnot(state::QuantumState, ctrl::Int, flip::Int)
     return QuantumState(new_state, state.bits)
 end
 
+function ccnot(state::QuantumState, ctrl1::Int, ctrl2::Int, flip::Int)
+    new_state = Array{Complex{Float64}}(length(state))
+
+    ctrl1 = state.bits - ctrl1
+    ctrl2 = state.bits - ctrl2
+    flip  = state.bits - flip
+
+    for i = 1:length(state)
+        basis = i - 1
+        if !is_zero(basis, ctrl1) && !is_zero(basis, ctrl2)
+            mapped = flip_bit(basis, flip)
+            new_state[i] = state[mapped + 1]
+        else
+            new_state[i] = state[i]
+        end
+    end
+
+    return QuantumState(new_state, state.bits)
+end
+
 function swap(state::QuantumState, x::Int, y::Int)
     new_state = Array{Complex{Float64}}(length(state))
 
@@ -76,6 +97,26 @@ function swap(state::QuantumState, x::Int, y::Int)
         basis = i - 1
         mapped = swap_bit(basis, x, y)
         new_state[i] = state[mapped + 1]
+    end
+
+    return QuantumState(new_state, state.bits)
+end
+
+function cswap(state::QuantumState, ctrl::Int, x::Int, y::Int)
+    new_state = Array{Complex{Float64}}(length(state))
+
+    ctrl = state.bits - ctrl
+    x = state.bits - x
+    y = state.bits - y
+
+    for i = 1:length(state)
+        basis = i - 1
+        if is_zero(basis, ctrl)
+            new_state[i] = state[i]
+        else
+            mapped = swap_bit(basis, x, y)
+            new_state[i] = state[mapped + 1]
+        end
     end
 
     return QuantumState(new_state, state.bits)
