@@ -1,5 +1,3 @@
-include("../src/QSpice.jl")
-include("../src/Netlist.jl")
 include("Common.jl")
 
 using FactCheck

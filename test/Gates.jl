@@ -1,4 +1,3 @@
-include("../src/QSpice.jl")
 include("Common.jl")
 
 using FactCheck
