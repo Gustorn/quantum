@@ -1,0 +1,10 @@
+1: qstate(bell,1,1,0)
+2: hadamard[1](1)             3: not[2](1)        4: cnot[3](1, 2)      5: ccnot[4](1, 2, 3)
+6: phase_shift[5](1, pi/4)    7: pauli_x[6](1)    8: pauli_y[7](1)      9: pauli_z[8](1)
+10:swap[9](1, 2)              11:cswap[10](1,2,3) 12:sqrt_swap[11](2,3)
+
+13:probe[12](Foo)
+14:probe[12]
+15:measure[12]
+16:partial_measure[12](1)
+17:partial_measure[12](1,2,3)

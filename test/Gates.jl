@@ -1,11 +1,8 @@
-include("QSpice.jl")
-
-import Base.isapprox
-
-import FactCheck.roughly
+include("../src/QSpice.jl")
+include("Common.jl")
 
 using FactCheck
-using QSpice, QSpice.Gates, QSpice.State, QSpice.Util, QSpice.Netlist
+using QSpice.Gates, QSpice.State
 
 const RUNS_PER_STATE = 100
 const QUBITS = [QUBIT_0, QUBIT_1]
@@ -20,18 +17,6 @@ function random_test_range(fn, bits_from, bits_to)
         end
     end
 end
-
-function isapprox(q1::Vector{Complex{Float64}}, q2::Vector{Complex{Float64}}, atol=0.0001)
-    for (x, y) in zip(q1, q2)
-        if !isapprox(x, y, atol = atol)
-            return false
-        end
-    end
-    return true
-end
-
-roughly(q1::QuantumState) = (q2::QuantumState) -> isapprox(q1, q2)
-roughly(q1::Vector{Complex{Float64}}) = (q2::QuantumState) -> isapprox(q1, q2.vector)
 
 facts("Quantum state creation sanity tests") do
     context("Single qubit state") do

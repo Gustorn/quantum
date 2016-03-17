@@ -11,11 +11,8 @@ using QSpice.State, QSpice.Gates, QSpice.Util, QSpice.Netlist
 
 export simulate
 
-function count_unfinished(outputs::Vector{Nullable{QuantumState}})
-    return count(isnull, outputs)
-end
-
-function flush(gates::Vector{Gate}, outputs::Vector{Nullable{QuantumState}})
+# TODO(gustorn): handle the outputs of measurement gates correctly
+function flush(gates::Vector{Gate}, outputs::Vector{Nullable{Any}})
     for g in gates
         inputs = map(x -> outputs[x], g.inputs)
         if !any(isnull, inputs) && isnull(outputs[g.index])
@@ -30,7 +27,7 @@ function simulate{S<:AbstractString}(filename::S)
         outputs[s.index] = s.state
     end
 
-    prev_unfinished = count_unfinished(outputs)
+    prev_unfinished = count(isnull, outputs)
     curr_unfinished = -1
 
     iteration = 1
@@ -40,7 +37,7 @@ function simulate{S<:AbstractString}(filename::S)
                 "\n================")
         flush(gates, outputs)
         prev_unfinished = curr_unfinished
-        curr_unfinished = count_unfinished(outputs)
+        curr_unfinished = count(isnull, outputs)
         iteration += 1
     end
 end
