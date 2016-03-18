@@ -1,10 +1,11 @@
 module Netlist
 
-using QSpice.State, QSpice.Gates
+using ParserCombinator
+using ..State, ..Gates
 
-export Gate, parse_netlist
+export Gate, InitialState, parse_netlist
 
-const NAME_FN_MAP = Dict{ASCIIString, Function}(
+const GATE_MAP = Dict{ASCIIString, Function}(
     "hadamard"    => hadamard,
     "not"         => not,
     "cnot"        => cnot,
@@ -33,174 +34,94 @@ type InitialState
     state::QuantumState
 end
 
-function ignore_whitespace{S<:AbstractString}(stream::S)
-    if stream == ""
-        return stream
+function parse_netlist{S<:AbstractString}(filename::S)
+    file = open(filename)
+    netlist_string = readall(file)
+    close(file)
+
+    spc = Drop(Star(Space()))
+
+    @with_pre spc begin
+        num = PInt64() | PFloat64()
+        str = p"\"[\w ]*\""
+        con = e"pi" | e"i" > parse_constant
+        op  = e"+" | e"-" | e"*" | e"/"
+
+        multiplied_constant = num + con > multiply_constant
+        numeric = multiplied_constant | con | num
+        simple_expr = (numeric + op + numeric) | numeric > perform_op
+
+        index = PInt64() + spc
+
+        # First the grammar describing the gates
+        gate_name  = e"hadamard"  | e"not"       | e"cnot"            | e"ccnot"   | e"swap"    |
+                     e"cswap"     | e"sqrt_swap" | e"phase_shift"     | e"pauli_x" | e"pauli_y" |
+                     e"pauli_z"   | e"measure"   | e"partial_measure" | e"probe" > parse_gate_name
+
+        conn_list = E"[]" | (E"[" + index + Star(E"," + index) + E"]") > connections
+
+        args      = (str | simple_expr | numeric) + spc
+        args_list = E"()" | (E"(" + args + Star(E"," + args) + E")") > arguments
+
+        gate = index + E":" + gate_name + ((conn_list + args_list) | (conn_list | args_list)) > create_gate
+
+        # Then the grammar for the initial quantum state
+        state_name = E"qstate"
+        qubit = (e"bell" | PInt64()) + spc > parse_qubit
+        qubit_list = E"(" + qubit + Star(E"," + qubit) + E")" > from_states
+        initial_state = index + E":" + state_name + qubit_list > InitialState
+
+        all_gates = Plus(gate | initial_state) + spc + Eos()
     end
 
-    pos = 1
-    while isspace(stream[pos]) pos += 1 end
-    return stream[pos:end]
+    netlist = parse_one(netlist_string, all_gates)
+
+    gates::Vector{Gate}            = filter(x -> isa(x, Gate), netlist)
+    states::Vector{InitialState}   = filter(x -> isa(x, InitialState), netlist)
+    outputs::Vector{Nullable{Any}} = fill(Nullable{Any}(), length(netlist))
+    return states, gates, outputs
 end
 
-function parse_index{S<:AbstractString}(stream::S)
-    stream = ignore_whitespace(stream)
-
-    if stream =="" || !isdigit(stream[1])
-        return (Nullable{Int}(), stream)
+function parse_constant{S<:AbstractString}(constant::S)
+    if constant == "pi"
+        return pi
+    elseif constant == "i"
+        return im
     end
-
-    index_end = findfirst(stream, ':')
-    return (tryparse(Int, stream[1:index_end - 1]), stream[index_end + 1:end])
+    error("Unsupported constant in expression")
 end
 
-function parse_name{S<:AbstractString}(stream::S)
-    stream = ignore_whitespace(stream)
-
-    if stream == "" || !isalpha(stream[1])
-        return (Nullable{AbstractString}(), stream)
-    end
-
-    bracket = findfirst(stream, '[')
-    paren = findfirst(stream, '(')
-
-    if bracket == 0 && paren == 0
-        return (Nullable{AbstractString}(), stream)
-    end
-
-    index_end = bracket == 0 ? paren : (paren == 0 ? bracket : min(paren, bracket))
-    return (Nullable(stream[1:index_end - 1]), stream[index_end:end])
+function multiply_constant(multiplier, constant)
+    return multiplier * constant
 end
 
-function parse_connections{S<:AbstractString}(stream::S)
-    stream = ignore_whitespace(stream)
-
-    if stream == "" || stream[1] != '['
-        return (Nullable{Array{Int}}(), stream)
+function perform_op{S<:AbstractString}(num1, op::S, num2)
+    if op == "+"
+        return num1 + num2
+    elseif op == "-"
+        return num1 - num2
+    elseif op == "*"
+        return num1 * num2
+    elseif op == "/"
+        return num1 / num2
     end
-
-    index_end = findfirst(stream, ']')
-    split_connections = split(stream[2:index_end - 1], ',', keep = false)
-
-    if isempty(split_connections)
-        return (Nullable{Array{Int}}(), stream[index_end + 1:end])
-    end
-
-    connections = map(x -> parse(Int, strip(x)), split_connections)
-    return (Nullable(connections), stream[index_end + 1:end])
+    error("Unsupported operator in expresseion")
 end
 
-function tryparse_floatint{S<:AbstractString}(arg::S)
-    # First try a simple integer parser
-    maybe_int = tryparse(Int, arg)
-    if !isnull(maybe_int)
-        return Nullable(get(maybe_int))
+perform_op(num) = num
+
+function parse_gate_name{S<:AbstractString}(gate::S)
+    if haskey(GATE_MAP, gate)
+       return GATE_MAP[gate]
     end
-
-    # If that didn't work, try a simple float parser
-    return tryparse(Float64, arg)
-end
-
-function tryparse_special{S<:AbstractString, T<:AbstractString, U<:Number}(arg::S, special::T, value::U)
-    sarg = split(arg, special, keep = false)
-    if isempty(sarg)
-        return Nullable(value)
-    end
-
-    if length(sarg) != 1
-        return Nullable{Number}()
-    end
-
-    maybe_numeric = tryparse_floatint(sarg[1])
-    return isnull(maybe_numeric) ? Nullable{Number}() : Nullable(get(maybe_numeric) * value)
-end
-
-# A very primitive expression parser. It supports *one of* +-*/,
-# the special constants i and pi, floating point and integer numbers
-function tryparse_expression{S<:AbstractString}(arg::S)
-    op = max(findfirst(arg, '+'),
-             findfirst(arg, '-'),
-             findfirst(arg, '*'),
-             findfirst(arg, '/'))
-
-    if op == 0
-        return Nullable{Number}()
-    end
-
-    # Now we only support a single operator
-    sargs = split(arg, arg[op])
-    if length(sargs) != 2
-        return Nullable{Number}()
-    end
-
-    numargs = []
-    for a in sargs
-        a = strip(a)
-        result = tryparse_floatint(a)
-        if contains(a, "pi")
-            result = tryparse_special(a, "pi", pi)
-        elseif contains(a, "i")
-            result = tryparse_special(a, "i", im)
-        end
-
-        if isnull(result)
-            return Nullable{Number}()
-        end
-
-        push!(numargs, get(result))
-    end
-
-    if arg[op] == '+'
-        return Nullable(numargs[1] + numargs[2])
-    elseif arg[op] == '-'
-        return Nullable(numargs[1] - numargs[2])
-    elseif arg[op] == '*'
-        return Nullable(numargs[1] * numargs[2])
-    elseif arg[op] == '/'
-        return Nullable(numargs[1] / numargs[2])
-    end
-
-    return Nullable{Number}()
-end
-
-function parse_argument{S<:AbstractString}(arg::S)
-    arg = strip(arg)
-
-    maybe_numeric = tryparse_floatint(arg)
-    if !isnull(maybe_numeric)
-        return get(maybe_numeric)
-    end
-
-    # Now try and parse it as a supported expression
-    maybe_expr = tryparse_expression(arg)
-
-    # If nothing worked, we'll treat it as a string
-    return isnull(maybe_expr) ? arg : get(maybe_expr)
-end
-
-function parse_arguments{S<:AbstractString}(stream::S)
-    stream = ignore_whitespace(stream)
-
-    if stream == "" || stream[1] != '('
-        return (Nullable{Array{Any}}(), stream)
-    end
-
-    index_end = findfirst(stream, ')')
-    split_args = split(stream[2:index_end - 1], ',', keep = false)
-
-    if isempty(split_args)
-        return (Nullable{Array{Any}}(), stream[index_end + 1: end])
-    end
-
-    arguments::Array{Any} = map(parse_argument, split_args)
-    return (Nullable(arguments), stream[index_end + 1:end])
+    error("Unsupported gate ($gate) in netlist")
 end
 
 function parse_qubit{S<:AbstractString}(qubit::S)
-    if lowercase(qubit) == "bell"
+    if qubit == "bell"
         return BELL_STATE
     end
-    error("Unsupported qubit state")
+    error("Unsupported qubit state in arguments")
 end
 
 function parse_qubit(qubit::Int)
@@ -209,42 +130,26 @@ function parse_qubit(qubit::Int)
     elseif qubit == 1
         return QUBIT_1
     end
-    error("Unsupported qubit state")
+    error("Unsupported qubit state in arguments")
 end
 
-function parse_netlist{S<:AbstractString}(filename::S)
-    file = open(filename)
-    netlist = strip(readall(file))
-    close(file)
-
-    initial_state::Vector{InitialState} = []
-    gates::Vector{Gate} = []
-
-    while netlist != ""
-        index, netlist = parse_index(netlist)
-        if isnull(index) error("No index found for gate in the netlist") end
-
-        name, netlist = parse_name(netlist)
-        if isnull(name) error("No name found for gate in the netlist") end
-
-        connections, netlist = parse_connections(netlist)
-        arguments, netlist = parse_arguments(netlist)
-
-        if get(name) == "qstate"
-            if isnull(arguments) error("No qubits given for an initial quantum state") end
-            push!(initial_state, InitialState(get(index), from_states(map(parse_qubit, get(arguments))...)))
-        else
-            if !haskey(NAME_FN_MAP, get(name))
-                error("The netlist contains a quantum gate that's not implemented yet")
-            end
-            fn = NAME_FN_MAP[get(name)]
-
-            actual_args = isnull(arguments) ? [] : get(arguments)
-            push!(gates, Gate(get(index), fn, get(connections), actual_args))
-        end
-    end
-    outputs = fill(Nullable{Any}(), length(initial_state) + length(gates))
-    return (initial_state, gates, outputs)
+function connections(cs::Int...)
+    return Vector{Int}([cs...])
 end
+
+function arguments(args::Any...)
+    return Vector{Any}([args...])
+end
+
+function arguments()
+    return Vector{Any}([])
+end
+
+function create_gate(index::Int, fn::Function, connections::Vector{Int})
+    return Gate(index, fn, connections, Vector{Any}([]))
+end
+
+create_gate(index::Int, fn::Function, connections::Vector{Int}, args::Vector{Any}) = Gate(index, fn, connections, args)
+
 
 end
