@@ -555,5 +555,9 @@ facts("Partial Measurement") do
             @fact m --> [0]
             @fact p --> roughly(1.0 / sqrt(2) .* [1.0 + 0im, 1])
         end
+
+        # Partially measuring the same bit multiple time should have the same effect
+        # as measuring it only once
+        @fact partial_measure(s11, 1, 1, 2, 2, 1, 2) --> partial_measure(s11, 1, 2)
     end
 end

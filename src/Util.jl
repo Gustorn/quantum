@@ -61,7 +61,6 @@ function shift_range_down(num::Int, start::Int, nbits::Int)
     return upper | lower
 end
 
-
 function weighed_random_state{T<:Real}(probabilities::Vector{T})
     prob_sum = sum(probabilities)
 

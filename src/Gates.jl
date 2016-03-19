@@ -128,13 +128,16 @@ function sqrt_swap(state::QuantumState, x::Int, y::Int)
     x = state.bits - x
     y = state.bits - y
 
+    mul_orig   = 0.5 + 0.5im
+    mul_mapped = 0.5 - 0.5im
+
     for i = 1:length(state)
         basis = i - 1
         mapped = swap_bit(basis, x, y)
         if basis == mapped
             new_state[i] = state[i]
         else
-            new_state[i] = 0.5 * ((1 + im) * state[i] + (1 - im) * state[mapped + 1])
+            new_state[i] = mul_orig * state[i] + mul_mapped * state[mapped + 1]
         end
     end
 
@@ -144,13 +147,14 @@ end
 function phase_shift(state::QuantumState, bit::Int, theta::Float64)
     new_state = Array{Complex{Float64}}(length(state))
     bit = state.bits - bit
+    etheta = exp(im * theta)
 
     for i = 1:length(state)
         basis = i - 1
         if is_zero(basis, bit)
             new_state[i] = state[i]
         else
-            new_state[i] = exp(im * theta) * state[i]
+            new_state[i] = etheta * state[i]
         end
     end
 
@@ -167,7 +171,7 @@ function pauli_y(state::QuantumState, bit::Int)
         basis = i - 1
         if is_zero(basis, bit)
             mapped = set_bit(basis, bit)
-            new_state[i] = im * state[mapped + 1]
+            new_state[i] =  im * state[mapped + 1]
         else
             mapped = clear_bit(basis, bit)
             new_state[i] = -im * state[mapped + 1]
@@ -184,7 +188,7 @@ function pauli_z(state::QuantumState, bit::Int)
     for i = 1:length(state)
         basis = i - 1
         if is_zero(basis, bit)
-            new_state[i] = state[i]
+            new_state[i] =  state[i]
         else
             new_state[i] = -state[i]
         end
@@ -251,6 +255,7 @@ function partial_measure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
     # First construct the array of bits we want to measure.
     measured_bits = [x0, x1]
     append!(measured_bits, [xs...])
+    measured_bits = unique(measured_bits)
 
     if length(measured_bits) == state.bits
         return (measure(state), EMPTY_STATE)
