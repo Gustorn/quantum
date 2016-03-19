@@ -33,4 +33,3 @@ for b in benchmarks
     result = Benchmarks.execute(b)
     println(result)
 end
-

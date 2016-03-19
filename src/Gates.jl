@@ -202,7 +202,7 @@ end
 # have any benefits
 function measure(state::QuantumState)
     probabilities = map(abs2, state.vector)
-    reverse(digits(weighed_random_state(probabilities), 2, state.bits))
+    return reverse(digits(weighed_random_state(probabilities), 2, state.bits))
 end
 
 # Performs partial measurement on the given bit of the quantum state
