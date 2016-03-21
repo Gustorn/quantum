@@ -433,6 +433,75 @@ facts("Pauli-Z gate") do
     end
 end
 
+facts("Arbitrary unitary gates") do
+    context("N-qubit Hadamard") do
+        h = 1.0 / sqrt(2.0) * [1 1; 1 -1]
+        random_test_range(1, 5) do test_state
+            x = rand(1:test_state.bits)
+            @fact hadamard(test_state, x) --> roughly(unitary(test_state, h, x))
+        end
+    end
+
+    context("N-qubit Not") do
+        n = [0 1; 1 0]
+        random_test_range(1, 5) do test_state
+            x = rand(1:test_state.bits)
+            @fact Gates.not(test_state, x) --> roughly(unitary(test_state, n, x))
+        end
+    end
+
+    context("N-qubit CNOT") do
+        cn = [1 0 0 0; 0 1 0 0; 0 0 0 1; 0 0 1 0]
+        random_test_range(2, 5) do test_state
+            x = rand(1:test_state.bits - 1)
+            y = rand(x + 1:test_state.bits)
+            @fact cnot(test_state, x, y) --> roughly(unitary(test_state, cn, x, y))
+        end
+    end
+
+    context("N-qubit CCNOT") do
+        ccn = [1 0 0 0 0 0 0 0;
+               0 1 0 0 0 0 0 0;
+               0 0 1 0 0 0 0 0;
+               0 0 0 1 0 0 0 0;
+               0 0 0 0 1 0 0 0;
+               0 0 0 0 0 1 0 0;
+               0 0 0 0 0 0 0 1;
+               0 0 0 0 0 0 1 0]
+        random_test_range(3, 6) do test_state
+            x = rand(1:test_state.bits - 2)
+            y = rand(x + 1:test_state.bits - 1)
+            z = rand(y + 1:test_state.bits)
+            @fact ccnot(test_state, x, y, z) --> roughly(unitary(test_state, ccn, x, y, z))
+        end
+    end
+
+    context("N-qubit SWAP") do
+        s = [1 0 0 0; 0 0 1 0; 0 1 0 0; 0 0 0 1]
+        random_test_range(2, 5) do test_state
+            x = rand(1:test_state.bits - 1)
+            y = rand(x + 1:test_state.bits)
+            @fact swap(test_state, x, y) --> roughly(unitary(test_state, s, x, y))
+        end
+    end
+    context("N-qubit CSWAP") do
+        cs = [1 0 0 0 0 0 0 0;
+              0 1 0 0 0 0 0 0;
+              0 0 1 0 0 0 0 0;
+              0 0 0 1 0 0 0 0;
+              0 0 0 0 1 0 0 0;
+              0 0 0 0 0 0 1 0;
+              0 0 0 0 0 1 0 0;
+              0 0 0 0 0 0 0 1]
+        random_test_range(3, 6) do test_state
+            x = rand(1:test_state.bits - 2)
+            y = rand(x + 1:test_state.bits - 1)
+            z = rand(y + 1:test_state.bits)
+            @fact cswap(test_state, x, y, z) --> roughly(unitary(test_state, cs, x, y, z))
+        end
+    end
+end
+
 function digits_to_num(darr::Vector{Int})
     result = 0
     offset = length(darr) - 1

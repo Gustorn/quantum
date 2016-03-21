@@ -7,7 +7,7 @@ using QSpice.Util
 
 export identity, hadamard, not, cnot, swap, sqrt_swap,
        phase_shift, pauli_x, pauli_y, pauli_z,
-       ccnot, cswap,
+       ccnot, cswap, unitary,
        measure, partial_measure, probe
 
 function identity(state::QuantumState)
@@ -197,6 +197,84 @@ function pauli_z(state::QuantumState, bit::Int)
     return QuantumState(new_state, state.bits)
 end
 
+function unitary(state::QuantumState, matrix::Array)
+    if length(state.vector) != size(matrix, 1) || length(state.vector) != size(matrix, 2)
+        error("The unitary matrix dimensions don't match the quantum state vector's");
+    end
+
+    return QuantumState(matrix * state.vector, state.bits)
+end
+
+function unitary(state::QuantumState, matrix::Array, bit0::Int, bits::Int...)
+    bits = [bit0, bits...]
+    map!(b -> state.bits - b, bits)
+    mapped_state_size = 2^length(bits)
+
+    # In case the matrix is a perfect match, a straight-up multiply is much faster
+    if length(state) == size(matrix, 1)
+        return unitary(state, matrix)
+    end
+
+    if mapped_state_size != size(matrix, 1) || mapped_state_size != size(matrix, 2)
+        error("The unitary matrix does not map enough bits")
+    end
+
+    # Cannot take the kronecker products of a single qubit state
+    if length(bits) == 1
+        mapped_bases = Vector[QUBIT_0.vector, QUBIT_1.vector]
+    else
+        # Generate the basis vectors in the order of: |00..00>, |00..01>, |00..10>, etc...
+        mapped_bases = [kron([get_bit(basis, qubit) == 0 ? QUBIT_0.vector : QUBIT_1.vector
+                              for qubit in length(bits)-1:-1:0]...)
+                        for basis in 0:mapped_state_size - 1]
+    end
+    map!(x -> matrix * x, mapped_bases)
+
+    new_state = fill(0.0 + 0im, length(state))
+    for i = 1:length(state)
+        basis = i - 1
+
+        # First we construct the index for the mapped basis vectors
+        partial_index = 0
+        shift_by = length(bits) - 1
+        for bit in bits
+            cb = get_bit(basis, bit)
+            partial_index = partial_index | (cb << shift_by)
+            shift_by -= 1
+        end
+        partial_index += 1
+
+        # Then for each mapped basis vector we collect the appropriate coefficients
+        # from the original states
+        for j=1:length(mapped_bases[partial_index]), k = 1:length(state)
+            mapped = j - 1
+            try_match = k - 1
+
+            # Check if the current (original) basis matches the mapped basis vector
+            # at the appropriate qubits
+            is_matching = true
+            for (mi, bit) in enumerate(bits)
+                if get_bit(try_match, bit) != get_bit(mapped, length(bits) - mi)
+                    is_matching = false;
+                    break
+                end
+            end
+
+            if is_matching
+                # If it matched then collect the coefficients, if the rest of the basis vectors match
+                inter_basis = reduce((a, x) -> clear_bit(a, x), basis, bits)
+                inter_match = reduce((a, x) -> clear_bit(a, x), try_match, bits)
+
+                if inter_basis == inter_match
+                    new_state[i] += mapped_bases[partial_index][mapped + 1] * state[try_match + 1]
+                end
+            end
+        end
+    end
+
+    return QuantumState(new_state, state.bits)
+end
+
 # This acts as a terminator right now. It could return a pure qubit
 # state that matches the measurement, but generally this doesn't really
 # have any benefits
@@ -253,8 +331,7 @@ end
 
 function partial_measure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
     # First construct the array of bits we want to measure.
-    measured_bits = [x0, x1]
-    append!(measured_bits, [xs...])
+    measured_bits = [x0, x1, xs...]
     measured_bits = unique(measured_bits)
 
     if length(measured_bits) == state.bits
@@ -310,6 +387,7 @@ function partial_measure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
         @itr for (i, bit) in zip(measured_bits, measurement)
             if get_bit(basis, i) != bit
                 state_matches = false
+                break
             end
         end
 
