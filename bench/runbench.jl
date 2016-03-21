@@ -8,6 +8,8 @@ s = from_states(BELL_STATE, QUBIT_0, QUBIT_1,
                 QUBIT_0, QUBIT_1, QUBIT_1, BELL_STATE,
                 BELL_STATE, BELL_STATE)
 
+cn = [1 0 0 0; 0 1 0 0; 0 0 0 1; 0 0 1 0]
+
 Benchmarks.@benchmarkable(hadamard!,         nothing, hadamard(s, rand(1:s.bits)),                              nothing)
 Benchmarks.@benchmarkable(not!,              nothing, not(s, rand(1:s.bits)),                                   nothing)
 Benchmarks.@benchmarkable(cnot!,             nothing, cnot(s, rand(1:s.bits), rand(1:s.bits)),                  nothing)
@@ -23,10 +25,11 @@ Benchmarks.@benchmarkable(measure!,          nothing, measure(s),               
 Benchmarks.@benchmarkable(partial_measure!,  nothing, partial_measure(s, rand(1:s.bits), rand(1:s.bits),
                                                                          rand(1:s.bits), rand(1:s.bits),
                                                                          rand(1:s.bits), rand(1:s.bits)),       nothing)
+Benchmarks.@benchmarkable(unitary_cnot!,     nothing, unitary(s, cn, 4, 3),                                     nothing)
 
 
 benchmarks = [hadamard!, not!, cnot!, ccnot!, swap!, cswap!, sqrt_swap!, phase_shift!, pauli_x!,
-              pauli_y!, pauli_z!, measure!, partial_measure!]
+              pauli_y!, pauli_z!, measure!, partial_measure!, unitary_cnot!]
 
 for b in benchmarks
     println("Benchmark: ", b)

@@ -2,7 +2,7 @@ module State
 
 using Iterators
 
-import Base: convert, copy, getindex, length,
+import Base: convert, copy, getindex, setindex!, length,
              print, show, showcompact,
              start, done, next, isapprox
 
@@ -68,6 +68,7 @@ copy(state::QuantumState) = QuantumState(copy(state.vector), copy(state.bits))
 
 length(state::QuantumState) = length(state.vector)
 getindex(state::QuantumState, i::Int) = state.vector[i]
+setindex!(state::QuantumState, c::Complex{Float64}, i::Int) = state.vector[i] = c
 
 start(state::QuantumState) = start(state.vector)
 done(state::QuantumState, current) = done(state.vector, current)

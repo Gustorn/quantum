@@ -207,72 +207,38 @@ end
 
 function unitary(state::QuantumState, matrix::Array, bit0::Int, bits::Int...)
     bits = [bit0, bits...]
-    map!(b -> state.bits - b, bits)
     mapped_state_size = 2^length(bits)
-
-    # In case the matrix is a perfect match, a straight-up multiply is much faster
-    if length(state) == size(matrix, 1)
-        return unitary(state, matrix)
-    end
 
     if mapped_state_size != size(matrix, 1) || mapped_state_size != size(matrix, 2)
         error("The unitary matrix does not map enough bits")
     end
 
-    # Cannot take the kronecker products of a single qubit state
-    if length(bits) == 1
-        mapped_bases = Vector[QUBIT_0.vector, QUBIT_1.vector]
+    new_state = state
+
+    for i = 1:length(bits)
+        new_state = swap(new_state, i, bits[i])
+
+        for j = i+1:length(bits)
+            if bits[j] == i
+                bits[j] = bits[i]
+            end
+        end
+    end
+
+    if length(state) == size(matrix, 1)
+        gate_matrix = matrix
     else
-        # Generate the basis vectors in the order of: |00..00>, |00..01>, |00..10>, etc...
-        mapped_bases = [kron([get_bit(basis, qubit) == 0 ? QUBIT_0.vector : QUBIT_1.vector
-                              for qubit in length(bits)-1:-1:0]...)
-                        for basis in 0:mapped_state_size - 1]
+        gate_matrix = kron(matrix, speye(2^(state.bits - length(bits))))
     end
-    map!(x -> matrix * x, mapped_bases)
+    new_state.vector = gate_matrix * new_state.vector
 
-    new_state = fill(0.0 + 0im, length(state))
-    for i = 1:length(state)
-        basis = i - 1
-
-        # First we construct the index for the mapped basis vectors
-        partial_index = 0
-        shift_by = length(bits) - 1
-        for bit in bits
-            cb = get_bit(basis, bit)
-            partial_index = partial_index | (cb << shift_by)
-            shift_by -= 1
-        end
-        partial_index += 1
-
-        # Then for each mapped basis vector we collect the appropriate coefficients
-        # from the original states
-        for j=1:length(mapped_bases[partial_index]), k = 1:length(state)
-            mapped = j - 1
-            try_match = k - 1
-
-            # Check if the current (original) basis matches the mapped basis vector
-            # at the appropriate qubits
-            is_matching = true
-            for (mi, bit) in enumerate(bits)
-                if get_bit(try_match, bit) != get_bit(mapped, length(bits) - mi)
-                    is_matching = false;
-                    break
-                end
-            end
-
-            if is_matching
-                # If it matched then collect the coefficients, if the rest of the basis vectors match
-                inter_basis = reduce((a, x) -> clear_bit(a, x), basis, bits)
-                inter_match = reduce((a, x) -> clear_bit(a, x), try_match, bits)
-
-                if inter_basis == inter_match
-                    new_state[i] += mapped_bases[partial_index][mapped + 1] * state[try_match + 1]
-                end
-            end
-        end
+    sb = length(bits) + 1
+    reverse!(bits)
+    for i = 1:length(bits)
+        new_state = swap(new_state, sb - i, bits[i])
     end
 
-    return QuantumState(new_state, state.bits)
+    return new_state
 end
 
 # This acts as a terminator right now. It could return a pure qubit

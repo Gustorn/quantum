@@ -472,7 +472,7 @@ facts("Arbitrary unitary gates") do
             x = rand(1:test_state.bits - 2)
             y = rand(x + 1:test_state.bits - 1)
             z = rand(y + 1:test_state.bits)
-            @fact ccnot(test_state, x, y, z) --> roughly(unitary(test_state, ccn, x, y, z))
+            @fact ccnot(test_state, z, x, y) --> roughly(unitary(test_state, ccn, z, x, y))
         end
     end
 
