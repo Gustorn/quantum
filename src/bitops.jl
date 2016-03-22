@@ -1,0 +1,40 @@
+module BitOps
+
+export swapbit, iszero, setbit, getbit,
+       clearbit, flipbit, removebit
+
+# Guarantee a 64-bit unsigned integer
+const ONE = 0x00000001
+
+function swapbit(num::Int, from::Int, to::Int)
+    temp = ((num >>> from) $ (num >>> to)) & ONE
+    return num $ ((temp << from) | (temp << to))
+end
+
+function iszero(num::Int, bit::Int)
+    return (num & (ONE << bit)) == 0
+end
+
+function getbit(num::Int, bit::Int)
+    return (num & (ONE << bit)) >>> bit
+end
+
+function setbit(num::Int, bit::Int)
+    return num | (ONE << bit)
+end
+
+function flipbit(num::Int, bit::Int)
+    return num $ (ONE << bit)
+end
+
+function clearbit(num::Int, bit::Int)
+    return num & ~(ONE << bit)
+end
+
+function removebit(num::Int, bit::Int)
+    upper = (num & (0xffffffff << (bit + 1))) >>> 1
+    lower = num & ((ONE << bit) - 1)
+    return upper | lower
+end
+
+end

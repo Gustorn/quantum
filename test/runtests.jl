@@ -1,5 +1,5 @@
-include("../src/QSpice.jl")
-include("../src/Netlist.jl")
+include("../src/qspice.jl")
+include("../src/netlist.jl")
 
-include("Gates.jl")
-include("Netlist.jl")
+include("gates.jl")
+include("netlist.jl")
