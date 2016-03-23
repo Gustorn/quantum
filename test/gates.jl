@@ -500,16 +500,6 @@ facts("Arbitrary unitary gates") do
     end
 end
 
-function todecimal(darr::Vector{Int})
-    result = 0
-    offset = length(darr) - 1
-    for d in darr
-        result |= (d << offset)
-        offset -= 1
-    end
-    return result
-end
-
 facts("Measurement") do
     context("Single qubit measurement") do
         @fact measure(QUBIT0) --> (EMPTY_STATE, [0])

@@ -1,267 +1,161 @@
 module Netlist
 
+using Match
+
 using QSpice.State, QSpice.Gates
 
-export Gate, parsenetlist
+export GateNode, QuantumStateNode, BitStateNode, broadcast, accept
 
-const FUNCTION_MAP = Dict{ASCIIString, Function}(
-    "hadamard"       => hadamard,
-    "not"            => not,
-    "cnot"           => cnot,
-    "ccnot"          => ccnot,
-    "phaseshift"     => phaseshift,
-    "paulix"         => paulix,
-    "pauliy"         => pauliy,
-    "pauliz"         => pauliz,
-    "swap"           => swap,
-    "cswap"          => cswap,
-    "sqrtswap"       => sqrtswap,
-    "probe"          => probe,
-    "measure"        => measure,
-    "partialmeasure" => partialmeasure
-)
+abstract GateType
 
-const SYMBOLS = [("pi", pi), ("i", im)]
+type Nullary <: GateType end
 
-type Gate
-    output::Int
-    fn::Function
-    inputs::Vector{Int}
-    arguments::Vector{Any}
+type Unary{T} <: GateType
+    param::T
 end
 
-type InitialState
-    output::Int
+type Binary{T, U} <: GateType
+    param1::T
+    param2::U
+end
+
+type Ternary{T, U, V} <: GateType
+    param1:T
+    param2:U
+    param3:V
+end
+
+type Dynamic{T} <: GateType
+    params::Vector{T}
+end
+
+type GateNode{T <: GateType, U <: GateType, V <: GateType}
+    behavior::Function
+
+    arguments::T
+    quantuminputs::U
+    bitinputs::V
+
+    qedge::Vector{GateNode}
+    bedge::Vector{GateNode}
+end
+
+type QuantumStateNode
     state::QuantumState
+    qedge::Vector{GateNode}
 end
 
-function skipwhitespace(stream)
-    pos = 1
-    while pos <= length(stream) && isspace(stream[pos])
-        pos += 1
-    end
-    return stream[pos:end]
+type BitStateNode
+    bits::Vector{Int}
+    bedge::Vector{GateNode}
 end
 
-function gateoutput(stream)
-    stream = skipwhitespace(stream)
+const QUANTUM_ONLY = [qidentity, hadamard, not, cnot,
+                      ccnot, swap, cswap, sqrtswap,
+                      paulix, pauliy, pauliz, phaseshift,
+                      measure, partialmeasure, probe, superposition]
 
-    if isempty(stream) || !isdigit(stream[1])
-        return stream, Nullable{Int}()
+const CLASSICAL_ONLY = [probe]
+
+const HYBRID = [choose1]
+
+function gatenode(behavior::Function, args::Vector{Any})
+    nullquantum() = Unary{QuantumState}(Nullable{QuantumState}())
+    nullbits() = Unary{Vector{Int}}(Nullable{Vector{Int}}())
+
+    @match behavior begin
+        qidentity      => GateNode(behavior, Nullary(),                       nullquantum(), Nullary(),  [], [])
+        hadamard       => GateNode(behavior, Unary{Int}(args...),             nullquantum(), Nullary(),  [], [])
+        not            => GateNode(behavior, Unary{Int}(args...),             nullquantum(), Nullary(),  [], [])
+        cnot           => GateNode(behavior, Binary{Int, Int}(args...),       nullquantum(), Nullary(),  [], [])
+        ccnot          => GateNode(behavior, Ternary{Int, Int, Int}(args...), nullquantum(), Nullary(),  [], [])
+        swap           => GateNode(behavior, Binary{Int, Int}(args...),       nullquantum(), Nullary(),  [], [])
+        cswap          => GateNode(behavior, Ternary{Int, Int, Int}(args...), nullquantum(), Nullary(),  [], [])
+        sqrtswap       => GateNode(behavior, Binary{Int, Int}(args...),       nullquantum(), Nullary(),  [], [])
+        paulix         => GateNode(behavior, Unary{Int}(args...),             nullquantum(), Nullary(),  [], [])
+        pauliy         => GateNode(behavior, Unary{Int}(args...),             nullquantum(), Nullary(),  [], [])
+        pauliz         => GateNode(behavior, Unary{Int}(args...),             nullquantum(), Nullary(),  [], [])
+        phaseshift     => GateNode(behavior, Binary{Int, Float64}(args...),   nullquantum(), Nullary(),  [], [])
+        measure        => GateNode(behavior, Nullary(),                       nullquantum(), Nullary(),  [], [])
+        partialmeasure => GateNode(behavior, Dynamic{Int},                    nullquantum(), Nullary(),  [], [])
+        probe          => GateNode(behavior, Unary{AbstractString}(args...),  nullquantum(), nullbits(), [], [])
+        superposition  => GateNode(behavior, Nullary(),                       Dynamic{QuantumState}(Nullable()), Nullary(), [], [])
     end
-
-    lastindex = findfirst(stream, ':')
-    return stream[lastindex + 1:end], tryparse(Int, stream[1:lastindex - 1])
 end
 
-function gatename(stream)
-    stream = skipwhitespace(stream)
-
-    if isempty(stream) || !isalpha(stream[1])
-        return stream, Nullable{ASCIIString}()
+function broadcast(gate::GateNode, qstate::QuantumState)
+    for q in gate.qedge
+        accept(q, qstate)
     end
-
-    lastindex = findfirst(c -> c == '[' || c == '(', stream)
-
-    if lastindex == 0
-        return stream, Nullable{ASCIIString}()
-    end
-
-    return stream[lastindex:end], Nullable(stream[1:lastindex - 1])
 end
 
-function inputs(stream)
-    stream = skipwhitespace(stream)
-
-    if isempty(stream) || stream[1] != '['
-        return stream, Nullable{Vector{Int}}()
+function broadcast(gate::QuantumStateNode)
+    for q in gate.qedge
+        accept(q, gate.state)
     end
-
-    lastindex = findfirst(stream, ']')
-    splitinputs = split(stream[2:lastindex - 1], ',', keep = false)
-
-    if isempty(splitinputs)
-        return stream[lastindex + 1:end], Nullable{Vector{Int}}()
-    end
-
-    inputs = map(x -> parse(Int, strip(x)), splitinputs)::Vector{Int}
-    return stream[lastindex + 1:end], Nullable(inputs)
 end
 
-function tryparse_floatint(arg::AbstractString)
-    tryint = tryparse(Int, arg)
-    return !isnull(tryint) ? tryint : tryparse(Float64, arg)
+function broadcast(gate::GateNode, bstate::Vector{Int})
+    for b in gate.bedge
+        accept(b, bstate)
+    end
 end
 
-function tryparse_symbol(special)
-    symbol = SYMBOLS[1][1]
-    symbolval = SYMBOLS[1][2]
-    hassymbol = contains(special, symbol)
-
-    if !hassymbol
-        for i = 2:length(SYMBOLS)
-            if contains(special, SYMBOLS[i][1])
-                symbol = SYMBOLS[i][1]
-                symbolval = SYMBOLS[i][2]
-                hassymbol = true
-                break
-            end
-        end
+function broadcast(gate::BitStateNode)
+    for b in gate.bedge
+        accept(b, gate.bits)
     end
-
-    if !hassymbol
-        return Nullable{Number}()
-    end
-
-    multiplier = split(special, symbol, keep = false)
-    if isempty(multiplier)
-        return Nullable(symbolval)
-    end
-
-    if length(multiplier) != 1
-        error("Syntactic error in an argument expression")
-    end
-
-    trynum = tryparse_floatint(multiplier[1])
-    return isnull(trynum) ? Nullable{Number}() : Nullable(get(trynum) * symbolval)
 end
 
-# A very primitive expression parser. It supports *one of* +-*/,
-# the special constants i and pi, floating point and integer numbers
-function tryparse_expression(expression)
-    opindex = max(findfirst(expression, '+'),
-                  findfirst(expression, '-'),
-                  findfirst(expression, '*'),
-                  findfirst(expression, '/'))
-
-    if opindex == 0
-        return Nullable{Number}()
-    end
-
-    # Now we only support a single operator
-    op = expression[opindex]
-    splitargs = split(expression, op)
-    if length(splitargs) != 2
-        return Nullable{Number}()
-    end
-
-    sides = []
-    for arg in splitargs
-        arg = strip(arg)
-        result = tryparse_floatint(arg)
-
-        if isnull(result)
-            result = tryparse_symbol(arg)
-        end
-
-        if isnull(result)
-            return Nullable{Number}()
-        end
-
-        push!(sides, get(result))
-    end
-
-    if op == '+'
-        return Nullable(sides[1] + sides[2])
-    elseif op == '-'
-        return Nullable(sides[1] - sides[2])
-    elseif op == '*'
-        return Nullable(sides[1] * sides[2])
-    elseif op == '/'
-        return Nullable(sides[1] / sides[2])
-    end
-
-    return Nullable{Number}()
+function broadcast(gate::GateNode, output::Tuple{QuantumState, Vector{Int}})
+    broadcast(gate, output[1])
+    broadcast(gate, output[2])
 end
 
-function argument(arg)
-    arg = strip(arg)
+function broadcast(gate::GateNode, x::Void) end
 
-    trynum = tryparse_floatint(arg)
-    if !isnull(trynum)
-        return get(trynum)
+function executeready(gate::GateNode)
+    if gate.behavior in HYBRID && !isnull(gate.qinput) && !isnull(gate.binput)
+        broadcast(gate, gate.behavior(get(gate.qinput), get(gate.binput), gate.arguments...))
+        gate.qinput = Nullable()
+        gate.binput = Nullable()
     end
-
-    # Now try and parse it as a supported expression
-    tryexpr = tryparse_expression(arg)
-
-    # If nothing worked, we'll treat it as a string
-    return isnull(tryexpr) ? arg : get(tryexpr)
 end
 
-function arguments(stream)
-    stream = skipwhitespace(stream)
-
-    if isempty(stream) || stream[1] != '('
-        return stream, Nullable{Vector{Any}}()
+function accept(gate::GateNode, qstate::QuantumState, states::QuantumState...)
+    if gate.behavior in QUANTUM_ONLY
+        broadcast(gate, gate.behavior(qstate, states..., gate.arguments...))
     end
-
-    lastindex = findfirst(stream, ')')
-    splitargs = split(stream[2:lastindex - 1], ',', keep = false)
-
-    if isempty(splitargs)
-        return stream[lastindex + 1:end], Nullable{Vector{Any}}()
-    end
-
-    arguments = convert(Vector{Any}, map(argument, splitargs))::Vector{Any}
-    return stream[lastindex + 1:end], Nullable(arguments)
 end
 
-function qubit(qs::AbstractString)
-    if lowercase(qs) == "bell"
-        return BELL_STATE
+function accept(gate::GateNode, qstate::QuantumState)
+    if gate.behavior in QUANTUM_ONLY
+        broadcast(gate, gate.behavior(qstate, gate.arguments...))
+        gate.binput = Nullable()
+    else
+        gate.qinput = Nullable(qstate)
+        executeready(gate)
     end
-    error("Unsupported qubit state")
 end
 
-function qubit(qi::Int)
-    if qi == 0
-        return QUBIT0
-    elseif qi == 1
-        return QUBIT1
+function accept(gate::GateNode, bstate::Vector{Int})
+    if gate.behavior in CLASSICAL_ONLY
+        broadcast(gate, gate.behavior(bstate, gate.arguments...))
+        gate.qinput = Nullable()
+    else
+        gate.binput = Nullable(bstate)
+        executeready(gate)
     end
-    error("Unsupported qubit state")
 end
 
-function parsenetlist(filename)
-    file = open(filename)
-    netlist = strip(readall(file))::ASCIIString
-    close(file)
-
-    initial::Vector{InitialState} = []
-    gates::Vector{Gate} = []
-
-    while !isempty(netlist)
-        netlist, output = gateoutput(netlist)
-        if isnull(output)
-            error("No output index found for gate in the netlist")
-        end
-
-        netlist, name = gatename(netlist)::Tuple{ASCIIString, Nullable{ASCIIString}}
-        if isnull(name)
-            error("No name found for gate in the netlist")
-        end
-
-        netlist, inputs = Netlist.inputs(netlist)
-        netlist, arguments = Netlist.arguments(netlist)
-
-        if get(name) == "qstate"
-            if isnull(arguments)
-                error("No qubits given for an initial quantum state")
-            end
-            push!(initial, InitialState(get(output), fromstates(map(qubit, get(arguments))...)))
-        else
-            if !haskey(FUNCTION_MAP, get(name))
-                error("Unsupported quantum gate detected: ", get(name))
-            end
-            fn = FUNCTION_MAP[get(name)]
-
-            actualargs = isnull(arguments) ? [] : get(arguments)
-            push!(gates, Gate(get(output), fn, get(inputs), actualargs))
-        end
+function accept(gate::GateNode, qstate::QuantumState, bstate::Vector{Int})
+    if gate.behavior in HYBRID
+        broadcast(gate, gate.behavior(get(gate.qinput), get(gate.binput), gate.arguments...))
+        gate.qinput = Nullable()
+        gate.binput = Nullable()
+    else
+        accept(gate, qstate)
+        accept(gate, bstate)
     end
-    outputs = fill(Nullable{Any}(), length(initial) + length(gates))
-    return (initial, gates, outputs)
 end
-
 end

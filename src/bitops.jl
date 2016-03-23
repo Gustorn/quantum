@@ -1,10 +1,20 @@
 module BitOps
 
 export swapbit, iszero, setbit, getbit,
-       clearbit, flipbit, removebit
+       clearbit, flipbit, removebit, todecimal
 
 # Guarantee a 64-bit unsigned integer
 const ONE = 0x00000001
+
+function todecimal(darr::Vector{Int})
+    result = 0
+    offset = length(darr) - 1
+    for d in darr
+        result |= (d << offset)
+        offset -= 1
+    end
+    return result
+end
 
 function swapbit(num::Int, from::Int, to::Int)
     temp = ((num >>> from) $ (num >>> to)) & ONE

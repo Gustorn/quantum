@@ -5,13 +5,17 @@ using Iterators
 using QSpice.BitOps
 using QSpice.State
 
-export identity, hadamard, not, cnot, swap, sqrtswap,
+export qidentity, hadamard, not, cnot, swap, sqrtswap,
        phaseshift, paulix, pauliy, pauliz,
-       ccnot, cswap, unitary,
-       measure, partialmeasure, probe
+       ccnot, cswap, unitary, choose1,
+       measure, partialmeasure, probe, superposition
 
-function identity(state::QuantumState)
+function qidentity(state::QuantumState)
     return copy(state)
+end
+
+function superposition(state1::QuantumState, state2::QuantumState, ss::QuantumState...)
+    return fromstates(state1, state2, ss...)
 end
 
 function hadamard(state::QuantumState, bit::Int)
@@ -239,6 +243,18 @@ function unitary(state::QuantumState, matrix::Array, x0::Int, xs::Int...)
     return newstate
 end
 
+function choose1(state::QuantumState, bits::Vector{Int}, gates::Vector{Tuple{Function, Vector{Any}}}...)
+    gates = gates |> collect
+    index = todecimal(bits) + 1
+    chain = gates[index]
+
+    newstate = chain[1][1](state, chain[1][2]...)
+    for i = 2:length(chain)
+        newstate = chain[i][1](newstate, chain[i][2]...)
+    end
+    return newstate
+end
+
 function randbasis{T<:Real}(probabilities::Vector{T})
     psum = sum(probabilities)
 
@@ -389,12 +405,12 @@ end
 # and probabilities. Useful for debugging and visualization. Guaranteed not to disturb
 # the quantum state
 function probe(state::QuantumState, name::AbstractString)
-    println(name, "\n", state)
+    println(name, "\n", state, "\n")
 end
 
 # The same as probe, but without the need for an explicit name
-function probe(state::QuantumState)
-    println(copy(state))
+function probe(state::Vector{Int}, name::AbstractString)
+    println(name, "\n", state, "\n")
 end
 
 end

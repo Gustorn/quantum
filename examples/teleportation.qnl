@@ -1,0 +1,13 @@
+0:qstate(rand)
+1:qstate(bell)
+2:superposition(Q0, Q1)
+
+3:cnot(Q2, 1, 2)
+4:hadamard(Q3, 1)
+5:partialmeasure(Q4, 1, 2)
+6:choose1(Q5, B5, identity(), not(1), pauliz(1), not(1) |> pauliz(1))
+
+
+100:probe(Q0, Original)
+101:probe(Q6, Reconstructed)
+102:probe(B5, Bits)

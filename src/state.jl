@@ -6,7 +6,7 @@ import Base: convert, copy, getindex, setindex!, length,
              show, start, done, next, endof, eltype, isapprox
 
 export QuantumState, QUBIT0, QUBIT1, EMPTY_STATE, BELL_STATE,
-       frombloch, fromstates, fromvector
+       frombloch, fromstates, fromvector, randomstate
 
 # A n-qubit quantum state is represented by the Kronecker-product of their
 # qubits, stored in `vector`, and the number of bits that make up that state,
@@ -53,6 +53,13 @@ function isapprox(q1::QuantumState, q2::QuantumState, atol=0.0001)
         end
     end
     return true
+end
+
+function randomstate(nbits::Int)
+    vec = [rand() + rand() * im for _ in 1:2^nbits]
+    n = sqrt(sumabs2(vec))
+    vec = vec .* (1.0 / n)
+    return QuantumState(vec, nbits)
 end
 
 convert(state::QuantumState) = state.vector

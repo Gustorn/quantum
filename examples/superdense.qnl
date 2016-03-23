@@ -1,0 +1,13 @@
+1:qstate(bell)
+2:randbstate(2)
+
+3:choose1(Q1, B2, identity(), not(1), pauliz(1), not(1) |> pauliz(1))
+4:cnot(Q3,1,2)
+5:hadamard(Q4,1)
+6:measure(Q5)
+
+7:probe(B2,Sending Bits)
+8:probe(Q3,Encoded As)
+9:probe(Q5,Decoded As)
+10:probe(B6,Received)
+
