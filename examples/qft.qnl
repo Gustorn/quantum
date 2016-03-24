@@ -1,0 +1,5 @@
+1:qstate(0,1,0,rand)
+2:qft(Q1)
+
+100:probe(Q1, Original)
+101:probe(Q2, After Fourier Transform)

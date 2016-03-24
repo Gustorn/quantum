@@ -1,7 +1,5 @@
 module Netlist
 
-using Match
-
 using QSpice.State, QSpice.Gates, QSpice.Parser
 
 export QuantumCircuit, readnetlist, simulate
@@ -36,7 +34,7 @@ type QuantumCircuit
 end
 
 const QUANTUM_PASSTHROUGH = [qidentity, hadamard, not, cnot,
-                             ccnot, swap, cswap, sqrtswap,
+                             ccnot, swap, cswap, sqrtswap, qft,
                              paulix, pauliy, pauliz, phaseshift,
                              measure, partialmeasure, probe]
 

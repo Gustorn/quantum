@@ -1,7 +1,5 @@
 module QSpice
 
-using Iterators.imap
-
 include("bitops.jl")
 include("state.jl")
 include("gates.jl")

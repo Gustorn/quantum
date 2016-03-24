@@ -1,7 +1,5 @@
 module State
 
-using Iterators
-
 import Base: convert, copy, getindex, setindex!, length,
              show, start, done, next, endof, eltype, isapprox
 

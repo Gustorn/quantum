@@ -1,14 +1,12 @@
 module Gates
 
-using Iterators
-
 using QSpice.BitOps
 using QSpice.State
 
 export qidentity, hadamard, not, cnot, swap, sqrtswap,
        phaseshift, paulix, pauliy, pauliz,
        ccnot, cswap, unitary, choose1,
-       measure, partialmeasure, probe, superposition
+       measure, partialmeasure, probe, superposition, qft
 
 function qidentity(state::QuantumState)
     return copy(state)
@@ -243,6 +241,13 @@ function unitary(state::QuantumState, matrix::Array, x0::Int, xs::Int...)
     return newstate
 end
 
+function qft(state::QuantumState)
+    omega = exp(2 * pi * im / state.bits)
+    matrix = [omega^((i - 1) * (j - 1)) for i = 1:length(state), j = 1:length(state)] .* (1.0 / sqrt(length(state)))
+    newstate = matrix * state.vector
+    return QuantumState(newstate, state.bits)
+end
+
 function choose1(state::QuantumState, bits::Vector{Int}, gates::Vector{Vector{Tuple{Function, Vector{Any}}}})
     index = todecimal(bits) + 1
     chain = gates[index]
@@ -369,7 +374,7 @@ function partialmeasure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
     for basis = 0:length(state) - 1
         # Check if the current basis vector matches the measurement at the specified bits
         basismatches = true
-        @itr for (bit, result) in zip(bits, measurement)
+        for (bit, result) in zip(bits, measurement)
             if getbit(basis, bit) != result
                 basismatches = false
                 break

@@ -26,10 +26,11 @@ Benchmarks.@benchmarkable(partialmeasure!,   nothing, partialmeasure(s, rand(1:s
                                                                         rand(1:s.bits), rand(1:s.bits),
                                                                         rand(1:s.bits), rand(1:s.bits)),        nothing)
 Benchmarks.@benchmarkable(unitarycnot!,      nothing, unitary(s, cn, 4, 3),                                     nothing)
+Benchmarks.@benchmarkable(qft!,              nothing, qft(s),                                                   nothing)
 
 
 benchmarks = [hadamard!, not!, cnot!, ccnot!, swap!, cswap!, sqrtswap!, phaseshift!, paulix!,
-              pauliy!, pauliz!, measure!, partialmeasure!, unitarycnot!]
+              pauliy!, pauliz!, measure!, partialmeasure!, unitarycnot!, qft!]
 
 for b in benchmarks
     println("Benchmark: ", b)

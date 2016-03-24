@@ -1,6 +1,5 @@
 module Parser
 
-using Iterators
 using QSpice.Gates, QSpice.State
 
 export ParsedGate, parsenetlist
@@ -32,6 +31,7 @@ const FUNCTION_MAP = Dict{ASCIIString, Function}(
     "measure"        => measure,
     "partialmeasure" => partialmeasure,
     "choose1"        => choose1,
+    "qft"            => qft,
 )
 
 function skipspace(s)
