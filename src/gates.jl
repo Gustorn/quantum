@@ -248,6 +248,13 @@ function qft(state::QuantumState)
     return QuantumState(newstate, state.bits)
 end
 
+function qft(state::QuantumState, bit::Int, bits::Int...)
+    partialsize = 2^length([bit, bits...])
+    omega = exp(2 * pi * im / state.bits)
+    matrix = [omega^((i - 1) * (j - 1)) for i = 1:partialsize, j = 1:partialsize] .* (1.0 / sqrt(partialsize))
+    return unitary(state, matrix, bit, bits...)
+end
+
 function choose1(state::QuantumState, bits::Vector{Int}, gates::Vector{Vector{Tuple{Function, Vector{Any}}}})
     index = todecimal(bits) + 1
     chain = gates[index]
