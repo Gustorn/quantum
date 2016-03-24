@@ -49,12 +49,12 @@ function skip(s, token)
     return s
 end
 
-function consume(s, fn, terminator)
+function consume(s, Int, terminator)
     last = findfirst(s, terminator)
     if last == 0
-        return s, Nullable()
+        return s, Nullable{Int}()
     end
-    return skipspace(s[last + 1:end]), fn(s[1:last - 1])
+    return skipspace(s[last + 1:end]), tryint(s[1:last - 1])
 end
 
 function expect(s, token)
@@ -202,7 +202,7 @@ end
 
 function gate(s)
     rollback = s
-    s, index = consume(s, tryint, ':')
+    s, index = consume(s, Int, ':')
     if isnull(index)
         return rollback, Nullable{Tuple{Int, ParsedGate}}()
     end
@@ -233,7 +233,7 @@ function qstate(s)
     end
 
     rollback = s
-    s, index = consume(s, tryint, ':')
+    s, index = consume(s, Int, ':')
     if isnull(index)
         return rollback, Nullable{Tuple{Int, QuantumState}}()
     end
@@ -245,7 +245,7 @@ function qstate(s)
     s = skip(s, "qstate")
     s = expect(s, '(')
     last = findfirst(s, ')')
-    states = map(x -> qubit(strip(x)), split(s[1:last - 1], ',', keep = false))
+    states = map(x -> qubit(strip(x)), split(s[1:last - 1], ',', keep = false))::Vector{QuantumState}
     return skipspace(s[last + 1:end]), Nullable((get(index), fromstates(states...)))
 end
 
@@ -262,19 +262,19 @@ function bstate(s)
     end
 
     rollback = s
-    s, index = consume(s, tryint, ':')
+    s, index = consume(s, Int, ':')
     if isnull(index)
-        return rollback, Nullable{Tuple{Int, QuantumState}}()
+        return rollback, Nullable{Tuple{Int, Vector{Int}}}()
     end
 
     if !startswith(s, "bstate")
-        return rollback, Nullable{Tuple{Int, QuantumState}}()
+        return rollback, Nullable{Tuple{Int, Vector{Int}}}()
     end
 
     s = skip(s, "bstate")
     s = expect(s, '(')
     last = findfirst(s, ')')
-    bits = map(x -> bit(strip(x)), split(s[1:last - 1], ',', keep = false))
+    bits = map(x -> bit(strip(x)), split(s[1:last - 1], ',', keep = false))::Vector{Int}
     return skipspace(s[last + 1:end]), Nullable((get(index), bits))
 end
 

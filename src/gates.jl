@@ -247,7 +247,7 @@ function choose1(state::QuantumState, bits::Vector{Int}, gates::Vector{Vector{Tu
     index = todecimal(bits) + 1
     chain = gates[index]
 
-    newstate = chain[1][1](state, chain[1][2]...)
+    newstate::QuantumState = chain[1][1](state, chain[1][2]...)
     for i = 2:length(chain)
         newstate = chain[i][1](newstate, chain[i][2]...)
     end
