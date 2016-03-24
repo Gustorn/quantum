@@ -1,5 +1,5 @@
 1:qstate(bell)
-2:randbstate(2)
+2:bstate(rand, rand)
 
 3:choose1(Q1, B2, identity(), not(1), pauliz(1), not(1) |> pauliz(1))
 4:cnot(Q3,1,2)

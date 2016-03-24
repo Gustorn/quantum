@@ -1,7 +1,7 @@
 include("common.jl")
 
 using FactCheck
-using QSpice.Gates, QSpice.State
+using QSpice.Gates, QSpice.State, QSpice.BitOps
 
 const RUNS_PER_STATE = 100
 const QUBITS = [QUBIT0, QUBIT1]

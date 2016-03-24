@@ -2,160 +2,147 @@ module Netlist
 
 using Match
 
-using QSpice.State, QSpice.Gates
+using QSpice.State, QSpice.Gates, QSpice.Parser
 
-export GateNode, QuantumStateNode, BitStateNode, broadcast, accept
+export QuantumCircuit, readnetlist, simulate
 
-abstract GateType
+abstract QuantumCircuitNode
 
-type Nullary <: GateType end
+type GateNode <: QuantumCircuitNode
+    fn::Function
+    args::Vector{Any}
 
-type Unary{T} <: GateType
-    param::T
+    qinputs::Vector{QuantumState}
+    binputs::Vector{Vector{Int}}
+
+    quantumedges::Vector{Int}
+    bitedges::Vector{Int}
 end
 
-type Binary{T, U} <: GateType
-    param1::T
-    param2::U
-end
-
-type Ternary{T, U, V} <: GateType
-    param1:T
-    param2:U
-    param3:V
-end
-
-type Dynamic{T} <: GateType
-    params::Vector{T}
-end
-
-type GateNode{T <: GateType, U <: GateType, V <: GateType}
-    behavior::Function
-
-    arguments::T
-    quantuminputs::U
-    bitinputs::V
-
-    qedge::Vector{GateNode}
-    bedge::Vector{GateNode}
-end
-
-type QuantumStateNode
+type QuantumNode <: QuantumCircuitNode
     state::QuantumState
-    qedge::Vector{GateNode}
+    edges::Vector{Int}
 end
 
-type BitStateNode
+type BitNode <: QuantumCircuitNode
     bits::Vector{Int}
-    bedge::Vector{GateNode}
+    edges::Vector{Int}
 end
 
-const QUANTUM_ONLY = [qidentity, hadamard, not, cnot,
-                      ccnot, swap, cswap, sqrtswap,
-                      paulix, pauliy, pauliz, phaseshift,
-                      measure, partialmeasure, probe, superposition]
+type QuantumCircuit
+    gatenodes::Dict{Int, GateNode}
+    qnodes::Dict{Int, QuantumNode}
+    bnodes::Dict{Int, BitNode}
+end
 
-const CLASSICAL_ONLY = [probe]
+const QUANTUM_PASSTHROUGH = [qidentity, hadamard, not, cnot,
+                             ccnot, swap, cswap, sqrtswap,
+                             paulix, pauliy, pauliz, phaseshift,
+                             measure, partialmeasure, probe]
 
-const HYBRID = [choose1]
+const BIT_PASSTHROUGH = [probe]
 
-function gatenode(behavior::Function, args::Vector{Any})
-    nullquantum() = Unary{QuantumState}(Nullable{QuantumState}())
-    nullbits() = Unary{Vector{Int}}(Nullable{Vector{Int}}())
+function readnetlist(s)
+    function addnotfound(gatenodes, index, gate)
+        if !haskey(gatenodes, index)
+            gatenodes[index] = GateNode(gate.fn, gate.args, [], [], [], [])
+        end
+    end
 
-    @match behavior begin
-        qidentity      => GateNode(behavior, Nullary(),                       nullquantum(), Nullary(),  [], [])
-        hadamard       => GateNode(behavior, Unary{Int}(args...),             nullquantum(), Nullary(),  [], [])
-        not            => GateNode(behavior, Unary{Int}(args...),             nullquantum(), Nullary(),  [], [])
-        cnot           => GateNode(behavior, Binary{Int, Int}(args...),       nullquantum(), Nullary(),  [], [])
-        ccnot          => GateNode(behavior, Ternary{Int, Int, Int}(args...), nullquantum(), Nullary(),  [], [])
-        swap           => GateNode(behavior, Binary{Int, Int}(args...),       nullquantum(), Nullary(),  [], [])
-        cswap          => GateNode(behavior, Ternary{Int, Int, Int}(args...), nullquantum(), Nullary(),  [], [])
-        sqrtswap       => GateNode(behavior, Binary{Int, Int}(args...),       nullquantum(), Nullary(),  [], [])
-        paulix         => GateNode(behavior, Unary{Int}(args...),             nullquantum(), Nullary(),  [], [])
-        pauliy         => GateNode(behavior, Unary{Int}(args...),             nullquantum(), Nullary(),  [], [])
-        pauliz         => GateNode(behavior, Unary{Int}(args...),             nullquantum(), Nullary(),  [], [])
-        phaseshift     => GateNode(behavior, Binary{Int, Float64}(args...),   nullquantum(), Nullary(),  [], [])
-        measure        => GateNode(behavior, Nullary(),                       nullquantum(), Nullary(),  [], [])
-        partialmeasure => GateNode(behavior, Dynamic{Int},                    nullquantum(), Nullary(),  [], [])
-        probe          => GateNode(behavior, Unary{AbstractString}(args...),  nullquantum(), nullbits(), [], [])
-        superposition  => GateNode(behavior, Nullary(),                       Dynamic{QuantumState}(Nullable()), Nullary(), [], [])
+    gates, qstates, bstates = parsenetlist(s)
+
+    gatenodes = Dict{Int, GateNode}()
+    qnodes = [i[1] => QuantumNode(i[2], []) for i in qstates]
+    bnodes = [i[1] => BitNode(i[2], []) for i in bstates]
+
+    for (index, gate) in gates
+        addnotfound(gatenodes, index, gate)
+        for qi in gate.quantuminputs
+            if haskey(qnodes, qi)
+                push!(qnodes[qi].edges, index)
+                continue
+            end
+            addnotfound(gatenodes, qi, gates[qi])
+            push!(gatenodes[qi].quantumedges, index)
+        end
+
+        for bi in gate.bitinputs
+            if haskey(bnodes, bi)
+                push!(bnodes[bi].edges, index)
+                continue
+            end
+            addnotfound(gatenodes, bi, gates[bi])
+            push!(gatenodes[bi].bitedges, index)
+        end
+    end
+
+    return QuantumCircuit(gatenodes, qnodes, bnodes)
+end
+
+function broadcast(netlist::QuantumCircuit, gatenode::GateNode, qstate::QuantumState)
+    for qedge in gatenode.quantumedges
+        accept(netlist, netlist.gatenodes[qedge], qstate)
     end
 end
 
-function broadcast(gate::GateNode, qstate::QuantumState)
-    for q in gate.qedge
-        accept(q, qstate)
+function broadcast(netlist::QuantumCircuit, gatenode::GateNode, bstate::Vector{Int})
+    for bedge in gatenode.bitedges
+        accept(netlist, netlist.gatenodes[bedge], bstate)
     end
 end
 
-function broadcast(gate::QuantumStateNode)
-    for q in gate.qedge
-        accept(q, gate.state)
+function broadcast(netlist::QuantumCircuit, gatenode::GateNode,
+                   states::Tuple{QuantumState, Vector{Int}})
+    broadcast(netlist, gatenode, states[1])
+    broadcast(netlist, gatenode, states[2])
+end
+
+function broadcast(netlist::QuantumCircuit, gatenode::GateNode, v::Void)
+    # Ordinarily only probes should call this function
+end
+
+function executeready(netlist::QuantumCircuit, gatenode::GateNode)
+    if gatenode.fn == superposition && length(gatenode.qinputs) == 2
+        broadcast(netlist, gatenode, gatenode.fn(gatenode.qinputs..., gatenode.args...))
+        empty!(gatenode.qinputs)
+    elseif gatenode.fn == choose1 && !isempty(gatenode.qinputs) && !isempty(gatenode.binputs)
+        broadcast(netlist, gatenode, gatenode.fn(gatenode.qinputs...,
+                                                 gatenode.binputs...,
+                                                 convert(Vector{Vector{Tuple{Function, Vector{Any}}}}, gatenode.args)))
+        empty!(gatenode.qinputs)
+        empty!(gatenode.binputs)
     end
 end
 
-function broadcast(gate::GateNode, bstate::Vector{Int})
-    for b in gate.bedge
-        accept(b, bstate)
+function accept(netlist::QuantumCircuit, gatenode::GateNode, qstate::QuantumState)
+    if gatenode.fn in QUANTUM_PASSTHROUGH
+        broadcast(netlist, gatenode, gatenode.fn(qstate, gatenode.args...))
+        return
+    end
+    push!(gatenode.qinputs, qstate)
+    executeready(netlist, gatenode)
+end
+
+function accept(netlist::QuantumCircuit, gatenode::GateNode, bstate::Vector{Int})
+    if gatenode.fn in BIT_PASSTHROUGH
+        broadcast(netlist, gatenode, gatenode.fn(bstate, gatenode.args...))
+        return
+    end
+    push!(gatenode.binputs, bstate)
+    executeready(netlist, gatenode)
+end
+
+function simulate(netlist::QuantumCircuit)
+    for qn in values(netlist.qnodes)
+        for edge in qn.edges
+            accept(netlist, netlist.gatenodes[edge], qn.state)
+        end
+    end
+    for bn in values(netlist.bnodes)
+        for edge in bn.edges
+            accept(netlist, netlist.gatenodes[edge], bn.bits)
+        end
     end
 end
 
-function broadcast(gate::BitStateNode)
-    for b in gate.bedge
-        accept(b, gate.bits)
-    end
-end
-
-function broadcast(gate::GateNode, output::Tuple{QuantumState, Vector{Int}})
-    broadcast(gate, output[1])
-    broadcast(gate, output[2])
-end
-
-function broadcast(gate::GateNode, x::Void) end
-
-function executeready(gate::GateNode)
-    if gate.behavior in HYBRID && !isnull(gate.qinput) && !isnull(gate.binput)
-        broadcast(gate, gate.behavior(get(gate.qinput), get(gate.binput), gate.arguments...))
-        gate.qinput = Nullable()
-        gate.binput = Nullable()
-    end
-end
-
-function accept(gate::GateNode, qstate::QuantumState, states::QuantumState...)
-    if gate.behavior in QUANTUM_ONLY
-        broadcast(gate, gate.behavior(qstate, states..., gate.arguments...))
-    end
-end
-
-function accept(gate::GateNode, qstate::QuantumState)
-    if gate.behavior in QUANTUM_ONLY
-        broadcast(gate, gate.behavior(qstate, gate.arguments...))
-        gate.binput = Nullable()
-    else
-        gate.qinput = Nullable(qstate)
-        executeready(gate)
-    end
-end
-
-function accept(gate::GateNode, bstate::Vector{Int})
-    if gate.behavior in CLASSICAL_ONLY
-        broadcast(gate, gate.behavior(bstate, gate.arguments...))
-        gate.qinput = Nullable()
-    else
-        gate.binput = Nullable(bstate)
-        executeready(gate)
-    end
-end
-
-function accept(gate::GateNode, qstate::QuantumState, bstate::Vector{Int})
-    if gate.behavior in HYBRID
-        broadcast(gate, gate.behavior(get(gate.qinput), get(gate.binput), gate.arguments...))
-        gate.qinput = Nullable()
-        gate.binput = Nullable()
-    else
-        accept(gate, qstate)
-        accept(gate, bstate)
-    end
-end
 end

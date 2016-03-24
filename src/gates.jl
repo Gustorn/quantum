@@ -243,8 +243,7 @@ function unitary(state::QuantumState, matrix::Array, x0::Int, xs::Int...)
     return newstate
 end
 
-function choose1(state::QuantumState, bits::Vector{Int}, gates::Vector{Tuple{Function, Vector{Any}}}...)
-    gates = gates |> collect
+function choose1(state::QuantumState, bits::Vector{Int}, gates::Vector{Vector{Tuple{Function, Vector{Any}}}})
     index = todecimal(bits) + 1
     chain = gates[index]
 
@@ -405,12 +404,14 @@ end
 # and probabilities. Useful for debugging and visualization. Guaranteed not to disturb
 # the quantum state
 function probe(state::QuantumState, name::AbstractString)
-    println(name, "\n", state, "\n")
+    println(name, "\n", state)
+    return state
 end
 
 # The same as probe, but without the need for an explicit name
 function probe(state::Vector{Int}, name::AbstractString)
     println(name, "\n", state, "\n")
+    return state
 end
 
 end

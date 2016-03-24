@@ -5,20 +5,20 @@ using Iterators.imap
 include("bitops.jl")
 include("state.jl")
 include("gates.jl")
-include("netlist.jl")
 include("parser.jl")
+include("netlist.jl")
 
 using QSpice.BitOps, QSpice.Gates, QSpice.Netlist, QSpice.State, QSpice.Parser
 
 export simulate
 
-function simulate(filename)
+function simulatefile(filename)
     f = open(filename)
     s = readall(f)
     close(f)
 
-    circuit = netlist(s)
-    Parser.flush(circuit)
+    circuit = readnetlist(s)
+    simulate(circuit)
 end
 
 end
