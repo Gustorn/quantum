@@ -1,4 +1,4 @@
-1:qstate(0,1,0,rand)
+1:qstate(0,1,0,1)
 2:qft(Q1)
 
 100:probe(Q1, Original)
