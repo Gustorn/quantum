@@ -3,7 +3,7 @@ module State
 import Base: convert, copy, getindex, setindex!, length,
              show, start, done, next, endof, eltype, isapprox
 
-export QuantumState, QUBIT0, QUBIT1, EMPTY_STATE, BELL_STATE,
+export QuantumState, QUBIT0, QUBIT1, BELL_STATE,
        frombloch, fromstates, fromvector, randomstate
 
 # A n-qubit quantum state is represented by the Kronecker-product of their
@@ -17,10 +17,6 @@ end
 # The two constants representing the |0> and |1> states (respectively)
 const QUBIT0 = QuantumState([1,0], 1)
 const QUBIT1 = QuantumState([0,1], 1)
-
-# TODO(gustorn): maybe get rid of the empty state and go for Nullable{QuantumState}
-# where applicable
-const EMPTY_STATE = QuantumState([], 0)
 const BELL_STATE  = QuantumState(1 / sqrt(2) .* [1,0,0,1], 2)
 
 # Constructs a new quantum state from the given state vector. It automatically
