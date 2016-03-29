@@ -4,21 +4,26 @@ using QSpice.BitOps
 using QSpice.State
 
 export identity, hadamard, not, cnot, ccnot,
-       swap, cswap, sqrtswap, phaseshift,
+       swap, cswap, sqrtswap, phaseshift, cphase,
        paulix, pauliy, pauliz,
-       unitary, choose1, superposition, join, qft,
+       unitary, choose1, superposition, join, split, qft,
        measure, partialmeasure, probe
 
 function identity(state::QuantumState)
     return copy(state)
 end
 
-function superposition(state1::QuantumState, state2::QuantumState, ss::QuantumState...)
-    return fromstates(state1, state2, ss...)
+function superposition(state1::QuantumState, state2::QuantumState)
+    return fromstates(state1, state2)
 end
 
-function join(state1::QuantumState, state2::QuantumState, ss::QuantumState...)
-    return QuantumState(vcat(state1, state2, ss...), state1.bits + state2.bits + sum(imap(x -> x.bits, ss)))
+function join(state1::QuantumState, state2::QuantumState)
+    return QuantumState(vcat(state1.vector, state2.vector), state1.bits + state2.bits)
+end
+
+function split(state::QuantumState, lastbit::Int)
+    lpos = 2^lastbit
+    return QuantumState(state[1:lpos], lastbit), QuantumState(state[lpos:end], state.bits - lastbit)
 end
 
 # Performs the following mapping:
@@ -183,6 +188,24 @@ function phaseshift(state::QuantumState, bit::Int, theta::Float64)
     for i = 1:length(state)
         basis = i - 1
         if iszero(basis, bit)
+            newstate[i] = state[i]
+        else
+            newstate[i] = mul * state[i]
+        end
+    end
+
+    return QuantumState(newstate, state.bits)
+end
+
+function cphase(state::QuantumState, control::Int, bit::Int, theta::Float64)
+    newstate = Vector{Complex{Float64}}(length(state))
+    control = state.bits - bit
+    bit = state.bits - bit
+    mul = exp(im * theta)
+
+    for i = 1:length(state)
+        basis = i - 1
+        if iszero(basis, bit) || iszero(basis, control)
             newstate[i] = state[i]
         else
             newstate[i] = mul * state[i]
