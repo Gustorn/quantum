@@ -1,3 +1,6 @@
+# Important note when extending the parser: make sure to call skipspace on the returned
+# stream whenever the parsing method is successful. Since netlist format doesn't care about
+# whitespace, this simplifies every other algorithm using these building blocks.
 module Parser
 
 using QSpice.Gates, QSpice.State
@@ -43,6 +46,8 @@ function skipspace(s)
     return s[pos:end]
 end
 
+# Skips a token if it was present in the input stream, otherwise
+# does nothing
 function skip(s, token)
     if startswith(s, token)
         return skipspace(s[length(token) + 1:end])
@@ -50,6 +55,9 @@ function skip(s, token)
     return s
 end
 
+# Consumes the stream up to and including the terminator value,
+# parsing and returning the value consumed with the type passed
+# as the second argument.
 function consume(s, Int, terminator)
     last = findfirst(s, terminator)
     if last == 0
@@ -58,6 +66,8 @@ function consume(s, Int, terminator)
     return skipspace(s[last + 1:end]), tryint(s[1:last - 1])
 end
 
+# Skips a token if it was present in the inputs stream, otherwise
+# throws an error
 function expect(s, token)
     if startswith(s, token)
         return skipspace(s[length(token) + 1:end])
@@ -68,12 +78,16 @@ end
 tryint(s) = tryparse(Int, s)
 tryfloat(s) = tryparse(Float64, s)
 
+# Parser a tagged index value, with the format of <tag><int>,
+# where <tag> may be an arbitrary string and <int> an 64-bit
+# integer value. The two pieces may NOT be separated by whitespace.
 function taggedindex(s, tag)
-    last = findfirst(x -> x == ',' || x == ')', s)
-    if last == 0
+    if !startswith(s, tag)
         return s, Nullable{Int}()
     end
-    if !startswith(s, tag)
+
+    last = findfirst(x -> x == ',' || x == ')', s)
+    if last == 0
         return s, Nullable{Int}()
     end
 
@@ -85,6 +99,9 @@ function taggedindex(s, tag)
     return skipspace(s[last:end]), Nullable(get(i))
 end
 
+# Used as a fallback for argument parsing. Tries to parse the argument
+# as an integer, then as a floating point number, and if both fail it returns
+# the argument as a string.
 function fallback(s)
     last = findfirst(x -> x == ',' || x == ')', s)
     if last == 0
@@ -113,6 +130,10 @@ function gatename(s)
     return s, Nullable{Function}()
 end
 
+# Parser a netlist function, but without quantum/bit state inputs. These
+# are used as arguments to top-level functions. Example:
+# choose1(Q1, B1, choose1(not(1)), not(1))
+# ^full           ^simple ^simple  ^simple
 function simplefn(s)
     rollback = s
 
@@ -128,8 +149,10 @@ function simplefn(s)
 
     arguments = Vector{Any}([])
     while !startswith(s, ')')
-        s, argfn = fullfn(s)
+        # First see if the argument in a function
+        s, argfn = simplefn(s)
         if !isnull(argfn)
+            # If it is, parse the full chain
             fnchain = Vector{Tuple{Function, Vector{Any}}}([])
             push!(fnchain, get(argfn))
 
@@ -142,6 +165,7 @@ function simplefn(s)
             continue
         end
 
+        # If not, use the fallback parser
         s, fb = fallback(s)
         push!(arguments, fb)
         s = skip(s, ',')
@@ -149,6 +173,7 @@ function simplefn(s)
     return skipspace(s[2:end]), Nullable((get(fn), arguments))
 end
 
+# Parses a top level function
 function fullfn(s)
     rollback = s
     s, fn = gatename(s)
@@ -166,8 +191,10 @@ function fullfn(s)
     bedges = Vector{Int}([])
 
     while !startswith(s, ')')
+        # First see if the argument in a function
         s, argfn = simplefn(s)
         if !isnull(argfn)
+            # If it is, parse the full chain
             fnchain = Vector{Tuple{Function, Vector{Any}}}([])
             push!(fnchain, get(argfn))
 
@@ -180,6 +207,7 @@ function fullfn(s)
             continue
         end
 
+        # If it's not, see if it's a quantum connection
         s, qi = taggedindex(s, 'Q')
         if !isnull(qi)
             push!(qedges, get(qi))
@@ -187,6 +215,7 @@ function fullfn(s)
             continue
         end
 
+        # Then if it's a classical connection
         s, bi = taggedindex(s, 'B')
         if !isnull(bi)
             push!(bedges, get(bi))
@@ -194,6 +223,7 @@ function fullfn(s)
             continue
         end
 
+        # And as a last resort use the fallback parser
         s, fb = fallback(s)
         push!(arguments, fb)
         s = skip(s, ',')
@@ -201,6 +231,7 @@ function fullfn(s)
     return skipspace(s[2:end]), Nullable((get(fn), arguments, qedges, bedges))
 end
 
+# Tries to parse a single gate with the syntax: <index>:<name>(args...)
 function gate(s)
     rollback = s
     s, index = consume(s, Int, ':')
@@ -216,6 +247,8 @@ function gate(s)
     return skipspace(s), Nullable((get(index), parsedgate(get(parsed))))
 end
 
+# Tries to parse a single quantum state with the syntax: <index>:qstate(qubit),
+# where qubit is one of: 0, 1, bell, rand
 function qstate(s)
     function qubit(q)
         if q == "0"
@@ -225,7 +258,9 @@ function qstate(s)
         elseif q == "bell"
             return BELL_STATE
         elseif q == "rand"
+            # Generate a random qubit
             state = [rand([-1, 1]) * rand() + rand([-1, 1]) * rand() * im for _ in 1:2]
+            # Then normalize it
             n = sqrt(sumabs2(state))
             state = state .* (1.0 / n)
             return QuantumState(state, 1)
@@ -250,6 +285,8 @@ function qstate(s)
     return skipspace(s[last + 1:end]), Nullable((get(index), fromstates(states...)))
 end
 
+# Tries to parse a single classical bit state with syntax: <index>:bstate(bit...)
+# where bit is one of the following: 0, 1, rand
 function bstate(s)
     function bit(b)
         if b == "0"
@@ -279,6 +316,7 @@ function bstate(s)
     return skipspace(s[last + 1:end]), Nullable((get(index), bits))
 end
 
+# Tries to parse the whole netlist
 function parsenetlist(s)
     gates = Dict{Int, ParsedGate}()
     qstates = Dict{Int, QuantumState}()

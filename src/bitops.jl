@@ -6,10 +6,10 @@ export swapbit, iszero, setbit, getbit,
 # Guarantee a 64-bit unsigned integer
 const ONE = 0x00000001
 
-function todecimal(darr::Vector{Int})
+function todecimal(bindigits::Vector{Int})
     result = 0
-    offset = length(darr) - 1
-    for d in darr
+    offset = length(bindigits) - 1
+    for d in bindigits
         result |= (d << offset)
         offset -= 1
     end

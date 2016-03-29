@@ -502,8 +502,13 @@ end
 
 facts("Measurement") do
     context("Single qubit measurement") do
-        @fact measure(QUBIT0) --> (EMPTY_STATE, [0])
-        @fact measure(QUBIT1) --> (EMPTY_STATE, [1])
+        posterior, measurement = measure(QUBIT0)
+        @fact posterior --> roughly(QUBIT0)
+        @fact measurement --> [0]
+
+        posterior, measurement = measure(QUBIT1)
+        @fact posterior --> roughly(QUBIT1)
+        @fact measurement --> [1]
     end
 
     context("Equal probability statistical test") do
@@ -547,8 +552,13 @@ end
 # These tests are not that comprehensive, but they are hard to automate
 facts("Partial Measurement") do
     context("Single qubit measurement") do
-        @fact partialmeasure(QUBIT0, 1) --> (EMPTY_STATE, [0])
-        @fact partialmeasure(QUBIT1, 1) --> (EMPTY_STATE, [1])
+        posterior, measurement = partialmeasure(QUBIT0, 1)
+        @fact posterior --> roughly(QUBIT0)
+        @fact measurement --> [0]
+
+        posterior, measurement = partialmeasure(QUBIT1, 1)
+        @fact posterior --> roughly(QUBIT1)
+        @fact measurement --> [1]
     end
 
     context("Two qubit measurement") do
@@ -568,7 +578,7 @@ facts("Partial Measurement") do
 
         posterior, measurement = partialmeasure(s00, 1, 2)
         @fact measurement --> [0, 0]
-        @fact posterior --> roughly(EMPTY_STATE)
+        @fact posterior --> roughly(s00)
 
         # State |01>
         posterior, measurement = partialmeasure(s01, 1)
@@ -581,7 +591,7 @@ facts("Partial Measurement") do
 
         posterior, measurement = partialmeasure(s01, 1, 2)
         @fact measurement --> [0, 1]
-        @fact posterior --> roughly(EMPTY_STATE)
+        @fact posterior --> roughly(s01)
 
         # State |10>
         posterior, measurement = partialmeasure(s10, 1)
@@ -594,7 +604,7 @@ facts("Partial Measurement") do
 
         posterior, measurement = partialmeasure(s10, 1, 2)
         @fact measurement --> [1, 0]
-        @fact posterior --> roughly(EMPTY_STATE)
+        @fact posterior --> roughly(s10)
 
         # State |11>
         posterior, measurement = partialmeasure(s11, 1)
@@ -607,7 +617,7 @@ facts("Partial Measurement") do
 
         posterior, measurement = partialmeasure(s11, 1, 2)
         @fact measurement --> [1, 1]
-        @fact posterior --> roughly(EMPTY_STATE)
+        @fact posterior --> roughly(s11)
 
         # Try states with different probabilities
         h = hadamard(s00, 1)
