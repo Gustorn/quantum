@@ -100,7 +100,7 @@ function broadcast(netlist::QuantumCircuit, gatenode::GateNode, v::Void)
 end
 
 function executeready(netlist::QuantumCircuit, gatenode::GateNode)
-    if gatenode.fn == superposition && length(gatenode.qinputs) == 2
+    if (gatenode.fn == superposition || gatenode.fn == join) && length(gatenode.qinputs) == 2
         broadcast(netlist, gatenode, gatenode.fn(gatenode.qinputs..., gatenode.args...))
         empty!(gatenode.qinputs)
     elseif gatenode.fn == choose1 && !isempty(gatenode.qinputs) && !isempty(gatenode.binputs)

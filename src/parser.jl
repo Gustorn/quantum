@@ -15,6 +15,7 @@ parsedgate(t::Tuple{Function, Vector{Any}, Vector{Int}, Vector{Int}}) = ParsedGa
 
 const FUNCTION_MAP = Dict{ASCIIString, Function}(
     "superposition"  => superposition,
+    "join"           => join,
     "identity"       => qidentity,
     "hadamard"       => hadamard,
     "not"            => not,

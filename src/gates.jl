@@ -1,11 +1,13 @@
 module Gates
 
+using Iterators.imap
+
 using QSpice.BitOps
 using QSpice.State
 
 export qidentity, hadamard, not, cnot, swap, sqrtswap,
        phaseshift, paulix, pauliy, pauliz,
-       ccnot, cswap, unitary, choose1,
+       ccnot, cswap, unitary, choose1, join,
        measure, partialmeasure, probe, superposition, qft
 
 function qidentity(state::QuantumState)
@@ -14,6 +16,10 @@ end
 
 function superposition(state1::QuantumState, state2::QuantumState, ss::QuantumState...)
     return fromstates(state1, state2, ss...)
+end
+
+function join(state1::QuantumState, state2::QuantumState, ss::QuantumState...)
+    return QuantumState(vcat(state1, state2, ss...), state1.bits + state2.bits + sum(imap(x -> x.bits, ss)))
 end
 
 function hadamard(state::QuantumState, bit::Int)
