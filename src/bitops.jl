@@ -18,7 +18,7 @@ end
 
 function swapbit(num::Int, from::Int, to::Int)
     temp = xor((num >>> from), (num >>> to)) & ONE
-    return num $ ((temp << from) | (temp << to))
+    return xor(num, ((temp << from) | (temp << to)))
 end
 
 function iszerobit(num::Int, bit::Int)
@@ -34,7 +34,7 @@ function setbit(num::Int, bit::Int)
 end
 
 function flipbit(num::Int, bit::Int)
-    return num $ (ONE << bit)
+    return xor(num, (ONE << bit))
 end
 
 function clearbit(num::Int, bit::Int)

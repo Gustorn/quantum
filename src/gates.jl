@@ -297,10 +297,10 @@ function unitary(state::QuantumState, matrix::Array, x0::Int, xs::Int...)
 
     # Perform the unitary operation
     if length(state) == size(matrix, 1)
-        newstate.vector = matrix * newstate.vector
+        newstate = QuantumState(matrix * newstate.vector, newstate.bits)
     else
         gatematrix = kron(matrix, speye(2^(state.bits - length(bits))))
-        newstate.vector = gatematrix * newstate.vector
+        newstate = QuantumState(gatematrix * newstate.vector, newstate.bits)
     end
 
     # The bits variable stores the actual operations that were performed to achieve
