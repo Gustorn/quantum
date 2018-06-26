@@ -7,17 +7,16 @@ using QSpice.Gates, QSpice.State
 
 export ParsedGate, parsenetlist
 
-type ParsedGate
+struct ParsedGate
     fn::Function
     args::Vector{Any}
     quantuminputs::Vector{Int}
     bitinputs::Vector{Int}
 end
 
-parsedgate(t::Tuple{Function, Vector{Any}, Vector{Int}, Vector{Int}}) = ParsedGate(t[1], t[2], t[3], t[4])
+parsedgate(t::Tuple{Function,Vector{Any},Vector{Int},Vector{Int}}) = ParsedGate(t[1], t[2], t[3], t[4])
 
-const FUNCTION_MAP = Dict{ASCIIString, Function}(
-    "superposition"  => superposition,
+const FUNCTION_MAP = Dict{String,Function}("superposition"  => superposition,
     "join"           => Gates.join,
     "identity"       => Gates.identity,
     "hadamard"       => hadamard,
@@ -35,8 +34,7 @@ const FUNCTION_MAP = Dict{ASCIIString, Function}(
     "measure"        => measure,
     "partialmeasure" => partialmeasure,
     "choose1"        => choose1,
-    "qft"            => qft,
-)
+    "qft"            => qft,)
 
 function skipspace(s)
     pos = 1
@@ -139,11 +137,11 @@ function simplefn(s)
 
     s, fn = gatename(s)
     if isnull(fn)
-        return rollback, Nullable{Tuple{Function, Vector{Any}}}()
+        return rollback, Nullable{Tuple{Function,Vector{Any}}}()
     end
 
     if isempty(s) || s[1] != '('
-        return rollback, Nullable{Tuple{Function, Vector{Any}}}()
+        return rollback, Nullable{Tuple{Function,Vector{Any}}}()
     end
     s = skip(s, '(')
 
@@ -153,7 +151,7 @@ function simplefn(s)
         s, argfn = simplefn(s)
         if !isnull(argfn)
             # If it is, parse the full chain
-            fnchain = Vector{Tuple{Function, Vector{Any}}}([])
+            fnchain = Vector{Tuple{Function,Vector{Any}}}([])
             push!(fnchain, get(argfn))
 
             while startswith(s, "|>")
@@ -178,11 +176,11 @@ function fullfn(s)
     rollback = s
     s, fn = gatename(s)
     if isnull(fn)
-        return rollback, Nullable{Tuple{Function, Vector{Any}, Vector{Int}, Vector{Int}}}()
+        return rollback, Nullable{Tuple{Function,Vector{Any},Vector{Int},Vector{Int}}}()
     end
 
     if isempty(s) || s[1] != '('
-        return rollback, Nullable{Tuple{Function, Vector{Any}, Vector{Int}, Vector{Int}}}()
+        return rollback, Nullable{Tuple{Function,Vector{Any},Vector{Int},Vector{Int}}}()
     end
     s = skip(s, '(')
 
@@ -195,7 +193,7 @@ function fullfn(s)
         s, argfn = simplefn(s)
         if !isnull(argfn)
             # If it is, parse the full chain
-            fnchain = Vector{Tuple{Function, Vector{Any}}}([])
+            fnchain = Vector{Tuple{Function,Vector{Any}}}([])
             push!(fnchain, get(argfn))
 
             while startswith(s, "|>")
@@ -236,12 +234,12 @@ function gate(s)
     rollback = s
     s, index = consume(s, Int, ':')
     if isnull(index)
-        return rollback, Nullable{Tuple{Int, ParsedGate}}()
+        return rollback, Nullable{Tuple{Int,ParsedGate}}()
     end
 
     s, parsed = fullfn(s)
     if isnull(parsed)
-        return rollback, Nullable{Tuple{Int, ParsedGate}}()
+        return rollback, Nullable{Tuple{Int,ParsedGate}}()
     end
 
     return skipspace(s), Nullable((get(index), parsedgate(get(parsed))))
@@ -261,7 +259,7 @@ function qstate(s)
             # Generate a random qubit
             state = [rand([-1, 1]) * rand() + rand([-1, 1]) * rand() * im for _ in 1:2]
             # Then normalize it
-            n = sqrt(sumabs2(state))
+            n = sqrt(sum(abs2, state))
             state = state .* (1.0 / n)
             return QuantumState(state, 1)
         end
@@ -271,17 +269,17 @@ function qstate(s)
     rollback = s
     s, index = consume(s, Int, ':')
     if isnull(index)
-        return rollback, Nullable{Tuple{Int, QuantumState}}()
+        return rollback, Nullable{Tuple{Int,QuantumState}}()
     end
 
     if !startswith(s, "qstate")
-        return rollback, Nullable{Tuple{Int, QuantumState}}()
+        return rollback, Nullable{Tuple{Int,QuantumState}}()
     end
 
     s = skip(s, "qstate")
     s = expect(s, '(')
     last = findfirst(s, ')')
-    states = map(x -> qubit(strip(x)), split(s[1:last - 1], ',', keep = false))::Vector{QuantumState}
+    states = map(x -> qubit(strip(x)), split(s[1:last - 1], ',', keep=false))::Vector{QuantumState}
     return skipspace(s[last + 1:end]), Nullable((get(index), fromstates(states...)))
 end
 
@@ -302,25 +300,25 @@ function bstate(s)
     rollback = s
     s, index = consume(s, Int, ':')
     if isnull(index)
-        return rollback, Nullable{Tuple{Int, Vector{Int}}}()
+        return rollback, Nullable{Tuple{Int,Vector{Int}}}()
     end
 
     if !startswith(s, "bstate")
-        return rollback, Nullable{Tuple{Int, Vector{Int}}}()
+        return rollback, Nullable{Tuple{Int,Vector{Int}}}()
     end
 
     s = skip(s, "bstate")
     s = expect(s, '(')
     last = findfirst(s, ')')
-    bits = map(x -> bit(strip(x)), split(s[1:last - 1], ',', keep = false))::Vector{Int}
+    bits = map(x -> bit(strip(x)), split(s[1:last - 1], ',', keep=false))::Vector{Int}
     return skipspace(s[last + 1:end]), Nullable((get(index), bits))
 end
 
 # Tries to parse the whole netlist
 function parsenetlist(s)
-    gates = Dict{Int, ParsedGate}()
-    qstates = Dict{Int, QuantumState}()
-    bstates = Dict{Int, Vector{Int}}()
+    gates = Dict{Int,ParsedGate}()
+    qstates = Dict{Int,QuantumState}()
+    bstates = Dict{Int,Vector{Int}}()
     while !isempty(s)
         s, trygate = gate(s)
         if !isnull(trygate)

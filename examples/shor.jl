@@ -87,7 +87,7 @@ function findperiod(n, q, x)
     for a = 0:q - 1
         reg2[powermod(x, a, n) + 1] += reg1[a + 1]
     end
-    n = sqrt(sumabs2(reg2.vector))
+    n = sqrt(sum(abs2, reg2.vector))
     reg2.vector = reg2.vector .* (1.0 / n)
 
     reg = Gates.join(reg1, reg2)

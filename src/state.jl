@@ -9,7 +9,7 @@ export QuantumState, QUBIT0, QUBIT1, BELL_STATE,
 # A n-qubit quantum state is represented by the Kronecker-product of their
 # qubits, stored in `vector`, and the number of bits that make up that state,
 # stored in `bits`
-type QuantumState
+struct QuantumState
     vector::Vector{Complex{Float64}}
     bits::Int
 end
@@ -21,7 +21,7 @@ const BELL_STATE  = QuantumState(1 / sqrt(2) .* [1,0,0,1], 2)
 
 # Constructs a new quantum state from the given state vector. It automatically
 # calculates the number of bits
-function fromvector{T<:Number}(state::Vector{T})
+function fromvector(state::Vector{T}) where {T <: Number}
     numbits = floor(Int, log2(length(state)))
     return QuantumState(state, numbits)
 end
@@ -42,7 +42,7 @@ end
 
 function isapprox(q1::QuantumState, q2::QuantumState, atol=0.0001)
     for (x, y) in zip(q1, q2)
-        if !isapprox(x, y, atol = atol)
+        if !isapprox(x, y, atol=atol)
             return false
         end
     end
@@ -51,7 +51,7 @@ end
 
 function randomstate(nbits::Int)
     vec = [rand() + rand() * im for _ in 1:2^nbits]
-    n = sqrt(sumabs2(vec))
+    n = sqrt(sum(abs2, vec))
     vec = vec .* (1.0 / n)
     return QuantumState(vec, nbits)
 end

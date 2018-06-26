@@ -12,7 +12,7 @@ export simulate
 
 function simulatefile(filename)
     f = open(filename)
-    s = readall(f)
+    s = readstring(f)
     close(f)
 
     circuit = readnetlist(s)

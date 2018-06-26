@@ -1,6 +1,6 @@
 module BitOps
 
-export swapbit, iszero, setbit, getbit,
+export swapbit, iszerobit, setbit, getbit,
        clearbit, flipbit, removebit, todecimal
 
 # Guarantee a 64-bit unsigned integer
@@ -17,11 +17,11 @@ function todecimal(bindigits::Vector{Int})
 end
 
 function swapbit(num::Int, from::Int, to::Int)
-    temp = ((num >>> from) $ (num >>> to)) & ONE
+    temp = xor((num >>> from), (num >>> to)) & ONE
     return num $ ((temp << from) | (temp << to))
 end
 
-function iszero(num::Int, bit::Int)
+function iszerobit(num::Int, bit::Int)
     return (num & (ONE << bit)) == 0
 end
 

@@ -6,7 +6,7 @@ using QSpice.State
 export identity, hadamard, not, cnot, ccnot,
        swap, cswap, sqrtswap, phaseshift, cphase,
        paulix, pauliy, pauliz,
-       unitary, choose1, superposition, join, split, qft,
+       unitary, choose1, superposition, joinstate, splitstate, qft,
        measure, partialmeasure, probe
 
 function identity(state::QuantumState)
@@ -17,11 +17,11 @@ function superposition(state1::QuantumState, state2::QuantumState)
     return fromstates(state1, state2)
 end
 
-function join(state1::QuantumState, state2::QuantumState)
+function joinstate(state1::QuantumState, state2::QuantumState)
     return QuantumState(vcat(state1.vector, state2.vector), state1.bits + state2.bits)
 end
 
-function split(state::QuantumState, lastbit::Int)
+function splitstate(state::QuantumState, lastbit::Int)
     lpos = 2^lastbit
     return QuantumState(state[1:lpos], lastbit), QuantumState(state[lpos:end], state.bits - lastbit)
 end
@@ -39,7 +39,7 @@ function hadamard(state::QuantumState, bit::Int)
         mapped0 = clearbit(basis, bit)
         mapped1 = setbit(basis, bit)
 
-        if iszero(basis, bit)
+        if iszerobit(basis, bit)
             newstate[i] = invsqrt2 * (state[mapped0 + 1] + state[mapped1 + 1])
         else
             newstate[i] = invsqrt2 * (state[mapped0 + 1] - state[mapped1 + 1])
@@ -74,7 +74,7 @@ function cnot(state::QuantumState, ctrl::Int, flip::Int)
 
     for i = 1:length(state)
         basis = i - 1
-        if iszero(basis, ctrl)
+        if iszerobit(basis, ctrl)
             newstate[i] = state[i]
         else
             mapped = flipbit(basis, flip)
@@ -95,7 +95,7 @@ function ccnot(state::QuantumState, ctrl1::Int, ctrl2::Int, flip::Int)
 
     for i = 1:length(state)
         basis = i - 1
-        if !iszero(basis, ctrl1) && !iszero(basis, ctrl2)
+        if !iszerobit(basis, ctrl1) && !iszerobit(basis, ctrl2)
             mapped = flipbit(basis, flip)
             newstate[i] = state[mapped + 1]
         else
@@ -136,7 +136,7 @@ function cswap(state::QuantumState, ctrl::Int, x::Int, y::Int)
 
     for i = 1:length(state)
         basis = i - 1
-        if iszero(basis, ctrl)
+        if iszerobit(basis, ctrl)
             newstate[i] = state[i]
         else
             mapped = swapbit(basis, x, y)
@@ -187,7 +187,7 @@ function phaseshift(state::QuantumState, bit::Int, theta::Float64)
 
     for i = 1:length(state)
         basis = i - 1
-        if iszero(basis, bit)
+        if iszerobit(basis, bit)
             newstate[i] = state[i]
         else
             newstate[i] = mul * state[i]
@@ -205,7 +205,7 @@ function cphase(state::QuantumState, control::Int, bit::Int, theta::Float64)
 
     for i = 1:length(state)
         basis = i - 1
-        if iszero(basis, bit) || iszero(basis, control)
+        if iszerobit(basis, bit) || iszerobit(basis, control)
             newstate[i] = state[i]
         else
             newstate[i] = mul * state[i]
@@ -226,7 +226,7 @@ function pauliy(state::QuantumState, bit::Int)
 
     for i = 1:length(state)
         basis = i - 1
-        if iszero(basis, bit)
+        if iszerobit(basis, bit)
             mapped = setbit(basis, bit)
             newstate[i] =  im * state[mapped + 1]
         else
@@ -247,7 +247,7 @@ function pauliz(state::QuantumState, bit::Int)
 
     for i = 1:length(state)
         basis = i - 1
-        if iszero(basis, bit)
+        if iszerobit(basis, bit)
             newstate[i] =  state[i]
         else
             newstate[i] = -state[i]
@@ -333,7 +333,7 @@ end
 # the bits argument. It performs the following mapping:
 # |x> to gates[decimal(bits) + 1](|x>)
 # Where the +1 adjusts the result to Julia's 1-based indexing system
-function choose1(state::QuantumState, bits::Vector{Int}, gates::Vector{Vector{Tuple{Function, Vector{Any}}}})
+function choose1(state::QuantumState, bits::Vector{Int}, gates::Vector{Vector{Tuple{Function,Vector{Any}}}})
     index = todecimal(bits) + 1
     chain = gates[index]
 
@@ -348,7 +348,7 @@ end
 # It uses the same algorithm as the one used in Fitness Proportionate Selection.
 # TODO(gustorn): See if the stochastic acceptance variant performs better for large
 #                quantum states
-function randbasis{T<:Real}(probabilities::Vector{T})
+function randbasis(probabilities::Vector{T}) where {T <: Real}
     psum = sum(probabilities)
 
     target = rand() * psum
@@ -396,7 +396,7 @@ function partialmeasure(state::QuantumState, bit::Int)
     prob0 = 0.0
     for i = 1:length(state)
         basis = i - 1
-        if iszero(basis, bit)
+        if iszerobit(basis, bit)
             prob0 += abs2(state[i])
         end
     end
@@ -417,7 +417,7 @@ function partialmeasure(state::QuantumState, bit::Int)
     # Now normalize the new state
     # TODO(gustorn): see if the error from FP precision has any visible
     # effect on the posterior states
-    n = sqrt(sumabs2(posterior))
+    n = sqrt(sum(abs2, posterior))
     posterior = posterior .* (1.0 / n)
 
     return QuantumState(posterior, state.bits - 1), [measurement]
@@ -433,7 +433,7 @@ function partialmeasure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
         return measure(state)
     end
 
-    map!(b -> state.bits - b, bits)
+    map!(b -> state.bits - b, bits, bits)
     sort!(bits)
 
     nposterior = state.bits - nbits
@@ -484,7 +484,7 @@ function partialmeasure(state::QuantumState, x0::Int, x1::Int, xs::Int...)
     end
 
     # Normalize the new state
-    n = sqrt(sumabs2(posterior))
+    n = sqrt(sum(abs2, posterior))
     posterior = posterior .* (1 / n)
 
     # Match the bit order of the regular `measure` function
